@@ -509,8 +509,7 @@
     .export-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 6px 10px;
-      align-items: start;
+      gap: 8px 12px;
     }
     .export-col-header {
       font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
@@ -520,30 +519,20 @@
       text-align: center;
     }
     .export-col-header.en { color: var(--accent-2); }
-    .export-item label {
-      display: block;
-      font-size: 10px;
-      color: var(--muted);
-      margin-bottom: 4px;
-      font-weight: 500;
-    }
-    .export-item select {
+    .export-btns { display: grid; gap: 6px; }
+    .export-btns button {
       width: 100%;
-      padding: 8px 10px;
+      padding: 8px 12px;
       font-size: 12px;
       border-radius: var(--radius-xs);
-      background: rgba(8, 12, 28, 0.8);
-      cursor: pointer;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b97b8' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 8px center;
-      padding-right: 28px;
+      text-align: center;
+      transform: none;
     }
-    .export-item select:hover { border-color: var(--border-light); }
-    .export-item select:focus {
-      border-color: rgba(91, 140, 255, 0.55);
-      box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.1);
+    .export-btns button:hover {
+      border-color: rgba(91, 140, 255, 0.5);
+      background: rgba(91, 140, 255, 0.12);
+      transform: none;
+      box-shadow: none;
     }
 
     code {
@@ -669,51 +658,19 @@
   </div>
 
   <div class="export-menu" id="exportMenu">
-    <p class="export-menu-title">选择语言与格式，下拉后自动下载（含分析解读）</p>
+    <p class="export-menu-title">点击即可下载报告（含分析解读）</p>
     <div class="export-grid">
       <div class="export-col-header">中文</div>
       <div class="export-col-header en">English</div>
-      <div class="export-item">
-        <label>Word</label>
-        <select data-export lang="zh" fmt="docx">
-          <option value="">导出 Word…</option>
-          <option value="docx">下载 .docx</option>
-        </select>
+      <div class="export-btns">
+        <button data-export lang="zh" fmt="docx">Word</button>
+        <button data-export lang="zh" fmt="md">Markdown</button>
+        <button data-export lang="zh" fmt="pdf">PDF</button>
       </div>
-      <div class="export-item">
-        <label>Word</label>
-        <select data-export lang="en" fmt="docx">
-          <option value="">Export Word…</option>
-          <option value="docx">Download .docx</option>
-        </select>
-      </div>
-      <div class="export-item">
-        <label>Markdown</label>
-        <select data-export lang="zh" fmt="md">
-          <option value="">导出 MD…</option>
-          <option value="md">下载 .md</option>
-        </select>
-      </div>
-      <div class="export-item">
-        <label>Markdown</label>
-        <select data-export lang="en" fmt="md">
-          <option value="">Export MD…</option>
-          <option value="md">Download .md</option>
-        </select>
-      </div>
-      <div class="export-item">
-        <label>PDF</label>
-        <select data-export lang="zh" fmt="pdf">
-          <option value="">导出 PDF…</option>
-          <option value="pdf">下载 .pdf</option>
-        </select>
-      </div>
-      <div class="export-item">
-        <label>PDF</label>
-        <select data-export lang="en" fmt="pdf">
-          <option value="">Export PDF…</option>
-          <option value="pdf">Download .pdf</option>
-        </select>
+      <div class="export-btns">
+        <button data-export lang="en" fmt="docx">Word</button>
+        <button data-export lang="en" fmt="md">Markdown</button>
+        <button data-export lang="en" fmt="pdf">PDF</button>
       </div>
     </div>
   </div>
@@ -1094,18 +1051,14 @@
       toast(lang === "zh" ? `已导出 ${filename}` : `Exported ${filename}`);
     }
 
-    document.querySelectorAll("[data-export]").forEach((select) => {
-      select.onchange = async (e) => {
-        const el = e.target;
-        if (!el.value) return;
-        const lang = el.dataset.lang;
-        const fmt = el.dataset.fmt;
+    document.querySelectorAll("[data-export]").forEach((btn) => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const { lang, fmt } = btn.dataset;
         try {
           await downloadReport(lang, fmt);
         } catch (err) {
           toast(err.message);
-        } finally {
-          el.selectedIndex = 0;
         }
       };
     });
