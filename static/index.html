@@ -66,7 +66,7 @@
       box-shadow: var(--shadow-sm);
       backdrop-filter: blur(20px);
       position: relative;
-      overflow: hidden;
+      overflow: visible;
     }
     .hero::before {
       content: "";
@@ -489,29 +489,27 @@
     .toast.show { display: block; }
 
     /* ── Export dropdown ── */
-    .export-wrap { position: relative; }
+    .export-wrap { position: relative; z-index: 50; }
     .export-menu {
       display: none;
-      position: absolute;
-      top: calc(100% + 8px);
-      right: 0;
-      min-width: 320px;
-      padding: 14px;
+      position: fixed;
+      width: 300px;
+      padding: 12px 14px;
       background: var(--panel-solid);
       border: 1px solid var(--border-light);
       border-radius: var(--radius-sm);
       box-shadow: var(--shadow);
-      z-index: 40;
+      z-index: 200;
       animation: slideUp 0.2s ease;
     }
     .export-menu.open { display: block; }
     .export-menu-title {
-      font-size: 12px; color: var(--muted); margin: 0 0 12px; line-height: 1.5;
+      font-size: 11px; color: var(--muted); margin: 0 0 10px; line-height: 1.45;
     }
     .export-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px 12px;
+      gap: 6px 10px;
       align-items: start;
     }
     .export-col-header {
@@ -583,55 +581,6 @@
         <button id="checkUpdatesBtn">检查更新</button>
         <div class="export-wrap">
           <button id="exportBtn">导出报告 ▾</button>
-          <div class="export-menu" id="exportMenu">
-            <p class="export-menu-title">选择语言与格式，下拉后自动下载（含分析解读）</p>
-            <div class="export-grid">
-              <div class="export-col-header">中文</div>
-              <div class="export-col-header en">English</div>
-              <div class="export-item">
-                <label>Word</label>
-                <select data-export lang="zh" fmt="docx">
-                  <option value="">导出 Word…</option>
-                  <option value="docx">下载 .docx</option>
-                </select>
-              </div>
-              <div class="export-item">
-                <label>Word</label>
-                <select data-export lang="en" fmt="docx">
-                  <option value="">Export Word…</option>
-                  <option value="docx">Download .docx</option>
-                </select>
-              </div>
-              <div class="export-item">
-                <label>Markdown</label>
-                <select data-export lang="zh" fmt="md">
-                  <option value="">导出 MD…</option>
-                  <option value="md">下载 .md</option>
-                </select>
-              </div>
-              <div class="export-item">
-                <label>Markdown</label>
-                <select data-export lang="en" fmt="md">
-                  <option value="">Export MD…</option>
-                  <option value="md">Download .md</option>
-                </select>
-              </div>
-              <div class="export-item">
-                <label>PDF</label>
-                <select data-export lang="zh" fmt="pdf">
-                  <option value="">导出 PDF…</option>
-                  <option value="pdf">下载 .pdf</option>
-                </select>
-              </div>
-              <div class="export-item">
-                <label>PDF</label>
-                <select data-export lang="en" fmt="pdf">
-                  <option value="">Export PDF…</option>
-                  <option value="pdf">Download .pdf</option>
-                </select>
-              </div>
-            </div>
-          </div>
         </div>
         <button id="batchDeleteBtn" class="danger">批量删除</button>
         <button id="createBtn">新建 Skill</button>
@@ -715,6 +664,56 @@
       <div id="updateReportBody"></div>
       <div class="modal-actions">
         <button data-close="updateReportModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="export-menu" id="exportMenu">
+    <p class="export-menu-title">选择语言与格式，下拉后自动下载（含分析解读）</p>
+    <div class="export-grid">
+      <div class="export-col-header">中文</div>
+      <div class="export-col-header en">English</div>
+      <div class="export-item">
+        <label>Word</label>
+        <select data-export lang="zh" fmt="docx">
+          <option value="">导出 Word…</option>
+          <option value="docx">下载 .docx</option>
+        </select>
+      </div>
+      <div class="export-item">
+        <label>Word</label>
+        <select data-export lang="en" fmt="docx">
+          <option value="">Export Word…</option>
+          <option value="docx">Download .docx</option>
+        </select>
+      </div>
+      <div class="export-item">
+        <label>Markdown</label>
+        <select data-export lang="zh" fmt="md">
+          <option value="">导出 MD…</option>
+          <option value="md">下载 .md</option>
+        </select>
+      </div>
+      <div class="export-item">
+        <label>Markdown</label>
+        <select data-export lang="en" fmt="md">
+          <option value="">Export MD…</option>
+          <option value="md">Download .md</option>
+        </select>
+      </div>
+      <div class="export-item">
+        <label>PDF</label>
+        <select data-export lang="zh" fmt="pdf">
+          <option value="">导出 PDF…</option>
+          <option value="pdf">下载 .pdf</option>
+        </select>
+      </div>
+      <div class="export-item">
+        <label>PDF</label>
+        <select data-export lang="en" fmt="pdf">
+          <option value="">Export PDF…</option>
+          <option value="pdf">Download .pdf</option>
+        </select>
       </div>
     </div>
   </div>
@@ -1048,12 +1047,30 @@
     $("batchDeleteBtn").onclick = batchDeleteSelected;
 
     const exportMenu = $("exportMenu");
+    const exportBtn = $("exportBtn");
+
+    function positionExportMenu() {
+      const rect = exportBtn.getBoundingClientRect();
+      const menuWidth = 300;
+      let left = rect.right - menuWidth;
+      left = Math.max(12, Math.min(left, window.innerWidth - menuWidth - 12));
+      exportMenu.style.top = `${rect.bottom + 6}px`;
+      exportMenu.style.left = `${left}px`;
+    }
+
     $("exportBtn").onclick = (e) => {
       e.stopPropagation();
+      const opening = !exportMenu.classList.contains("open");
       exportMenu.classList.toggle("open");
+      if (opening) positionExportMenu();
     };
+    window.addEventListener("resize", () => {
+      if (exportMenu.classList.contains("open")) positionExportMenu();
+    });
     document.addEventListener("click", (e) => {
-      if (!e.target.closest(".export-wrap")) exportMenu.classList.remove("open");
+      if (!e.target.closest(".export-wrap") && !e.target.closest("#exportMenu")) {
+        exportMenu.classList.remove("open");
+      }
     });
 
     async function downloadReport(lang, fmt) {
