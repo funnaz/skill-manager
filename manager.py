@@ -14,7 +14,7 @@ from typing import Any
 import yaml
 
 from scanner import HOME, _read_frontmatter, read_skill_content, scan_all
-from skill_parser import parse_skill_md
+from skill_parser import parse_skill_md, slugify_skill_name
 
 SKILL_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^[a-z]{1,2}$")
 PROTECTED_CATEGORIES = {"grok-bundled", "marketplace", "package"}
@@ -174,6 +174,18 @@ def can_delete(skill: dict[str, Any]) -> tuple[bool, str]:
     return True, ""
 
 
+def _resolve_skill_name_from_input(raw: str | None, fallback: str) -> str:
+    cleaned = (raw or "").strip()
+    if cleaned:
+        slug = slugify_skill_name(cleaned)
+        if slug:
+            try:
+                return validate_skill_name(slug)
+            except ValueError:
+                pass
+    return validate_skill_name(fallback)
+
+
 def create_skill(
     name: str | None = None,
     description: str | None = None,
@@ -183,14 +195,13 @@ def create_skill(
 ) -> dict[str, Any]:
     if skill_md:
         parsed = parse_skill_md(skill_md)
-        skill_name = validate_skill_name(name or parsed["name"])
+        skill_name = _resolve_skill_name_from_input(name, parsed["name"])
         final_desc = (description or parsed["description"]).strip()
         content = parsed["skill_md"]
-        if name or description:
-            meta, body_text = _read_frontmatter(content)
-            meta["name"] = skill_name
-            meta["description"] = final_desc
-            content = _render_skill_md(meta, body_text)
+        meta, body_text = _read_frontmatter(content)
+        meta["name"] = skill_name
+        meta["description"] = final_desc
+        content = _render_skill_md(meta, body_text)
         analysis = {
             "name_source": parsed["name_source"],
             "description_source": parsed["description_source"],

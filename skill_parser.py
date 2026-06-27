@@ -202,6 +202,10 @@ def _build_analysis_notes(
     return notes
 
 
+def slugify_skill_name(text: str) -> str:
+    return _slugify(text)
+
+
 def parse_skill_md(content: str) -> dict[str, Any]:
     text = content.strip()
     if not text:

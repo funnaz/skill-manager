@@ -478,6 +478,11 @@
       border-top-style: solid;
       opacity: 0.85;
     }
+    .auto-filled {
+      border-color: rgba(91, 140, 255, 0.55) !important;
+      box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12) !important;
+      transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
     .modal-card.wide { width: min(900px, 100%); max-height: 86vh; overflow: auto; }
 
@@ -675,8 +680,8 @@
         </label>
         <button type="button" id="createAnalyzeBtn">分析内容</button>
         <div class="create-analysis" id="createAnalysis"></div>
-        <label>名称（可修改）<input id="createName" placeholder="自动解析，如 my-skill" /></label>
-        <label>功能描述（可修改）<input id="createDesc" placeholder="自动解析：这个 skill 做什么、何时触发" /></label>
+        <label>名称（可修改，自动填入解析标题）<input id="createName" placeholder="解析后自动填入标题" /></label>
+        <label>功能描述（可修改，自动填入解析结果）<input id="createDesc" placeholder="解析后自动填入功能描述" /></label>
         <label>安装位置
           <select id="createScope">
             <option value="grok">Grok 用户 (~/.grok/skills)</option>
@@ -751,7 +756,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all", withUpdates: false };
+    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all", withUpdates: false, lastParseResult: null };
     const $ = (id) => document.getElementById(id);
     const toast = (msg) => { const el = $("toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 3200); };
     const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -1213,6 +1218,23 @@
       };
     }
 
+    function highlightAutoFilled(...elements) {
+      elements.forEach((el) => {
+        el.classList.add("auto-filled");
+        setTimeout(() => el.classList.remove("auto-filled"), 1200);
+      });
+    }
+
+    function applyParseResult(result) {
+      if (!result) return;
+      const nameInput = $("createName");
+      const descInput = $("createDesc");
+      nameInput.value = result.title || result.name || "";
+      descInput.value = result.description || "";
+      state.lastParseResult = result;
+      highlightAutoFilled(nameInput, descInput);
+    }
+
     function renderCreateAnalysis(result) {
       const box = $("createAnalysis");
       if (!result) {
@@ -1222,10 +1244,10 @@
       }
       const notes = (result.analysis_notes || []).map(n => `<div>• ${escapeHtml(n)}</div>`).join("");
       const triggers = (result.triggers || []).slice(0, 3).map(t => `<div>• 触发：${escapeHtml(t)}</div>`).join("");
-      box.innerHTML = `<strong>解析完成</strong>
-        <div>标题：${escapeHtml(result.title || "-")}</div>
-        <div>建议名称：${escapeHtml(result.name || "-")}（${escapeHtml(result.name_source || "")}）</div>
-        <div>功能描述：${escapeHtml(result.description || "-")}（${escapeHtml(result.description_source || "")}）</div>
+      box.innerHTML = `<strong>解析完成，已填入下方文本栏</strong>
+        <div>标题 → 名称：${escapeHtml(result.title || "-")}</div>
+        <div>文件夹名：${escapeHtml(result.name || "-")}（${escapeHtml(result.name_source || "")}）</div>
+        <div>功能描述 → 描述栏：${escapeHtml(result.description || "-")}（${escapeHtml(result.description_source || "")}）</div>
         ${notes}${triggers}`;
       box.classList.add("show");
     }
@@ -1233,15 +1255,15 @@
     async function analyzeCreateMd(showToast = true) {
       const content = $("createMd").value.trim();
       if (!content) {
+        state.lastParseResult = null;
         renderCreateAnalysis(null);
         if (showToast) toast("请先粘贴 Markdown 内容");
         return null;
       }
       const result = await api("/api/skills/parse-md", "POST", { content });
-      $("createName").value = result.name || "";
-      $("createDesc").value = result.description || "";
+      applyParseResult(result);
       renderCreateAnalysis(result);
-      if (showToast) toast("已自动解析名称与功能描述");
+      if (showToast) toast("已填入名称与功能描述");
       return result;
     }
 
@@ -1249,6 +1271,7 @@
       $("createMd").value = "";
       $("createName").value = "";
       $("createDesc").value = "";
+      state.lastParseResult = null;
       renderCreateAnalysis(null);
       updateCreateDropzoneState();
       openModal("createModal");
@@ -1259,10 +1282,14 @@
       updateCreateDropzoneState();
       clearTimeout(createAnalyzeTimer);
       createAnalyzeTimer = setTimeout(() => {
-        if ($("createMd").value.trim().length >= 40) {
-          analyzeCreateMd(false).catch(() => {});
+        if ($("createMd").value.trim().length >= 20) {
+          analyzeCreateMd(false).catch((err) => toast(err.message));
         }
-      }, 700);
+      }, 500);
+    });
+    $("createMd").addEventListener("paste", () => {
+      clearTimeout(createAnalyzeTimer);
+      createAnalyzeTimer = setTimeout(() => analyzeCreateMd(false).catch((err) => toast(err.message)), 150);
     });
     $("installBtn").onclick = () => openModal("installModal");
     document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
