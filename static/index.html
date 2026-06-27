@@ -438,6 +438,46 @@
     }
     .create-analysis.show { display: block; }
     .create-analysis strong { color: #a8c4ff; }
+    .md-dropzone {
+      position: relative;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(8, 12, 28, 0.45);
+      transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+    }
+    .md-dropzone.dragover {
+      border-color: rgba(91, 140, 255, 0.65);
+      background: rgba(91, 140, 255, 0.08);
+      box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.12);
+    }
+    .md-dropzone textarea {
+      border: none;
+      background: transparent;
+      min-height: 200px;
+    }
+    .md-dropzone textarea:focus {
+      box-shadow: none;
+    }
+    .md-dropzone-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      border-top: 1px dashed rgba(36, 48, 79, 0.6);
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .md-dropzone-hint button {
+      padding: 5px 12px;
+      font-size: 12px;
+      border-radius: 999px;
+    }
+    .md-dropzone.has-content .md-dropzone-hint {
+      border-top-style: solid;
+      opacity: 0.85;
+    }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
     .modal-card.wide { width: min(900px, 100%); max-height: 86vh; overflow: auto; }
 
@@ -621,10 +661,17 @@
   <div class="modal" id="createModal">
     <div class="modal-card wide">
       <h3>新建 Skill</h3>
-      <p>粘贴 SKILL.md 或 Markdown 正文，系统会自动解析名称与功能描述。</p>
+      <p>粘贴或拖拽上传 SKILL.md / Markdown 文件，系统会自动解析名称与功能描述。</p>
       <div class="form-grid">
         <label>Markdown 内容
-          <textarea id="createMd" placeholder="可粘贴完整 SKILL.md，或仅粘贴正文（含标题、何时使用、触发方式等）"></textarea>
+          <div class="md-dropzone" id="createDropzone">
+            <textarea id="createMd" placeholder="可粘贴、拖拽或选择 .md / .txt 文件"></textarea>
+            <div class="md-dropzone-hint">
+              <span>拖拽文件到上方区域，或</span>
+              <button type="button" id="createPickFile">选择文件</button>
+              <input type="file" id="createFileInput" accept=".md,.markdown,.txt,text/markdown,text/plain" hidden />
+            </div>
+          </div>
         </label>
         <button type="button" id="createAnalyzeBtn">分析内容</button>
         <div class="create-analysis" id="createAnalysis"></div>
@@ -1090,6 +1137,81 @@
       };
     });
     let createAnalyzeTimer = null;
+    let createDragDepth = 0;
+
+    function updateCreateDropzoneState() {
+      const zone = $("createDropzone");
+      zone.classList.toggle("has-content", Boolean($("createMd").value.trim()));
+    }
+
+    function isCreateMdFile(file) {
+      const name = file.name.toLowerCase();
+      return name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".txt") || name === "skill.md";
+    }
+
+    async function importCreateMdFile(file) {
+      if (!file || !isCreateMdFile(file)) {
+        toast("仅支持 .md / .markdown / .txt 文件");
+        return;
+      }
+      const text = await file.text();
+      $("createMd").value = text;
+      updateCreateDropzoneState();
+      await analyzeCreateMd(true);
+      toast(`已导入 ${file.name}`);
+    }
+
+    function bindCreateDropzone() {
+      const zone = $("createDropzone");
+      const fileInput = $("createFileInput");
+
+      ["dragenter", "dragover"].forEach((eventName) => {
+        zone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          createDragDepth += 1;
+          zone.classList.add("dragover");
+        });
+      });
+      zone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        createDragDepth = Math.max(0, createDragDepth - 1);
+        if (createDragDepth === 0) zone.classList.remove("dragover");
+      });
+      zone.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        createDragDepth = 0;
+        zone.classList.remove("dragover");
+        const files = [...(e.dataTransfer?.files || [])];
+        const mdFile = files.find(isCreateMdFile);
+        if (!mdFile) {
+          toast("请拖入 .md / .txt 文件");
+          return;
+        }
+        try {
+          await importCreateMdFile(mdFile);
+        } catch (err) {
+          toast(err.message || "导入失败");
+        }
+      });
+
+      $("createPickFile").onclick = (e) => {
+        e.preventDefault();
+        fileInput.click();
+      };
+      fileInput.onchange = async () => {
+        const file = fileInput.files?.[0];
+        fileInput.value = "";
+        if (!file) return;
+        try {
+          await importCreateMdFile(file);
+        } catch (err) {
+          toast(err.message || "导入失败");
+        }
+      };
+    }
 
     function renderCreateAnalysis(result) {
       const box = $("createAnalysis");
@@ -1128,10 +1250,13 @@
       $("createName").value = "";
       $("createDesc").value = "";
       renderCreateAnalysis(null);
+      updateCreateDropzoneState();
       openModal("createModal");
     };
+    bindCreateDropzone();
     $("createAnalyzeBtn").onclick = () => analyzeCreateMd(true).catch(err => toast(err.message));
     $("createMd").addEventListener("input", () => {
+      updateCreateDropzoneState();
       clearTimeout(createAnalyzeTimer);
       createAnalyzeTimer = setTimeout(() => {
         if ($("createMd").value.trim().length >= 40) {
