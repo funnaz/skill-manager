@@ -6,6 +6,7 @@ import subprocess
 import webbrowser
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -158,6 +159,13 @@ async def api_enable(payload: ToggleSkillRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+def _attachment_disposition(filename: str) -> str:
+    safe = filename.encode("ascii", "ignore").decode() or "skill-report.bin"
+    if safe == filename:
+        return f'attachment; filename="{filename}"'
+    return f"attachment; filename=\"{safe}\"; filename*=UTF-8''{quote(filename)}"
+
+
 @APP.get("/api/export")
 async def api_export(fmt: str = "md", lang: str = "zh") -> Any:
     try:
@@ -167,7 +175,7 @@ async def api_export(fmt: str = "md", lang: str = "zh") -> Any:
         return Response(
             content=content,
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": _attachment_disposition(filename)},
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

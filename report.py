@@ -402,7 +402,7 @@ def build_export_bytes(fmt: str, lang: str = "zh", data: dict[str, Any] | None =
 
     data = data or scan_all()
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    prefix = "skill-report" if lang == "en" else "skill-报告"
+    prefix = f"skill-report-{lang}"
 
     if fmt == "md":
         content = build_markdown_report(data, lang=lang).encode("utf-8")
@@ -439,7 +439,7 @@ def export_report(
     if output_path:
         path = Path(output_path)
     else:
-        prefix = "skill-report" if lang == "en" else "skill-报告"
+        prefix = f"skill-report-{lang}"
         path = Path.cwd() / f"{prefix}-{timestamp}{suffix}"
 
     if isinstance(path_content, bytes):
