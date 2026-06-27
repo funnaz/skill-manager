@@ -61,7 +61,7 @@ def cmd_enable(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
-    result = export_report(args.format, args.output)
+    result = export_report(args.format, args.output, lang=args.lang)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
@@ -138,7 +138,8 @@ def build_parser() -> argparse.ArgumentParser:
     enable_p.set_defaults(func=cmd_enable)
 
     export_p = sub.add_parser("export", help="导出扫描报告")
-    export_p.add_argument("--format", default="json", choices=["json", "markdown"])
+    export_p.add_argument("--format", default="md", choices=["json", "markdown", "md", "docx", "pdf"])
+    export_p.add_argument("--lang", default="zh", choices=["zh", "en"])
     export_p.add_argument("--output")
     export_p.set_defaults(func=cmd_export)
 

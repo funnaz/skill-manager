@@ -9,13 +9,13 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 
 from config_io import disable_skill, enable_skill
 from constants import GITHUB_URL
 from manager import batch_delete, create_skill, delete_skill, install_skill
-from report import build_markdown_report, export_report
+from report import build_export_bytes, export_report
 from scanner import read_skill_content, scan_all
 from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
 
@@ -159,11 +159,16 @@ async def api_enable(payload: ToggleSkillRequest) -> dict[str, Any]:
 
 
 @APP.get("/api/export")
-async def api_export(fmt: str = "json") -> Any:
+async def api_export(fmt: str = "md", lang: str = "zh") -> Any:
     try:
-        if fmt == "markdown":
-            return PlainTextResponse(build_markdown_report(), media_type="text/markdown; charset=utf-8")
-        return export_report("json")
+        if fmt == "json":
+            return export_report("json")
+        content, media_type, filename = build_export_bytes(fmt, lang)
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
