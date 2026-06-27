@@ -13,6 +13,17 @@ from scanner import scan_all
 
 EXPORT_FORMATS = ("md", "docx", "pdf")
 EXPORT_LANGS = ("zh", "en")
+FMT_ALIASES = {
+    "word": "docx",
+    "markdown": "md",
+    ".docx": "docx",
+    ".md": "md",
+    ".pdf": "pdf",
+}
+
+
+def normalize_export_fmt(fmt: str) -> str:
+    return FMT_ALIASES.get(fmt.lower().strip(), fmt.lower().strip())
 
 
 def _category_counts(data: dict[str, Any]) -> dict[str, int]:
@@ -382,7 +393,7 @@ def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> b
 
 
 def build_export_bytes(fmt: str, lang: str = "zh", data: dict[str, Any] | None = None) -> tuple[bytes, str, str]:
-    fmt = fmt.lower()
+    fmt = normalize_export_fmt(fmt)
     lang = lang.lower()
     if fmt not in EXPORT_FORMATS:
         raise ValueError(f"format 仅支持 {', '.join(EXPORT_FORMATS)}")

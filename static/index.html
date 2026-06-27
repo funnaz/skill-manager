@@ -663,14 +663,14 @@
       <div class="export-col-header">中文</div>
       <div class="export-col-header en">English</div>
       <div class="export-btns">
-        <button data-export lang="zh" fmt="docx">Word</button>
-        <button data-export lang="zh" fmt="md">Markdown</button>
-        <button data-export lang="zh" fmt="pdf">PDF</button>
+        <button data-export data-lang="zh" data-fmt="docx">Word (.docx)</button>
+        <button data-export data-lang="zh" data-fmt="md">Markdown (.md)</button>
+        <button data-export data-lang="zh" data-fmt="pdf">PDF (.pdf)</button>
       </div>
       <div class="export-btns">
-        <button data-export lang="en" fmt="docx">Word</button>
-        <button data-export lang="en" fmt="md">Markdown</button>
-        <button data-export lang="en" fmt="pdf">PDF</button>
+        <button data-export data-lang="en" data-fmt="docx">Word (.docx)</button>
+        <button data-export data-lang="en" data-fmt="md">Markdown (.md)</button>
+        <button data-export data-lang="en" data-fmt="pdf">PDF (.pdf)</button>
       </div>
     </div>
   </div>
@@ -1054,7 +1054,8 @@
     document.querySelectorAll("[data-export]").forEach((btn) => {
       btn.onclick = async (e) => {
         e.stopPropagation();
-        const { lang, fmt } = btn.dataset;
+        const lang = btn.dataset.lang;
+        const fmt = btn.dataset.fmt;
         try {
           await downloadReport(lang, fmt);
         } catch (err) {
