@@ -11,7 +11,7 @@ from constants import GITHUB_INSTALL_CMD, GITHUB_URL
 from manager import batch_delete, create_skill, delete_skill, install_skill
 from report import export_report
 from scanner import scan_all
-from updater import check_updates, merge_updates_into_scan, upgrade_skill
+from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
 
 
 def cmd_scan(_: argparse.Namespace) -> int:
@@ -82,6 +82,12 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_merge(args: argparse.Namespace) -> int:
+    result = merge_skill_integrated(args.name)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_serve(args: argparse.Namespace) -> int:
     import uvicorn
 
@@ -145,6 +151,10 @@ def build_parser() -> argparse.ArgumentParser:
     upgrade_p.add_argument("--name", required=True)
     upgrade_p.add_argument("--scope")
     upgrade_p.set_defaults(func=cmd_upgrade)
+
+    merge_p = sub.add_parser("merge", help="整合官方最新版本与本地改动")
+    merge_p.add_argument("--name", required=True)
+    merge_p.set_defaults(func=cmd_merge)
 
     serve_p = sub.add_parser("serve", help="启动 Web 面板")
     serve_p.add_argument("--host", default="127.0.0.1")

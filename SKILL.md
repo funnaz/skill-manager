@@ -152,17 +152,38 @@ python <skill-manager-root>/cli.py check-updates --merge
 - **well-known 源**（如飞书 lark skills）：拉取远程 `SKILL.md`，比较 `version` 与内容哈希
 - 状态包括：`up_to_date`、`update_available`、`local_modified`、`content_diff`
 
-### 8. 升级 Skill
+### 8. 整合更新（推荐）
 
-仅支持 GitHub 源一键升级：
+当官方有新版本、同时用户本地也改过 skill 时，用整合而不是直接覆盖：
+
+```bash
+python <skill-manager-root>/cli.py merge --name lark-doc
+```
+
+整合规则：
+- 以官方最新版为基础
+- 保留本地新增文件
+- `SKILL.md`：采用官方 frontmatter + 官方正文，并追加「本地保留内容」
+- `references/`、`scripts/` 等官方资源优先采用远程版本
+- 操作前自动备份到 `~/.skill-manager/backups/`
+
+### 9. 覆盖升级
+
+GitHub 源可直接覆盖：
 
 ```bash
 python <skill-manager-root>/cli.py upgrade --name dbs
 ```
 
-well-known 源若检测到更新，提示用户用原安装器重新同步。
+well-known 源若没有本地改动，也会走整合逻辑，仅更新 `SKILL.md`。
 
-### 9. 导出报告
+检查完成后，应打开 Web 面板的「更新检查报告」弹窗，向用户说明：
+1. 哪些 skill 是官方版本号更新
+2. 哪些 skill 仅远程内容变化
+3. 哪些 skill 本地有改动
+4. 每个 skill 的本地文件差异列表
+
+### 10. 导出报告
 
 ```bash
 python <skill-manager-root>/cli.py export --format markdown --output skill-report.md

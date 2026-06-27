@@ -1,4 +1,4 @@
-"""Detect and apply skill updates from remote sources."""
+"""Detect, diff, merge and apply skill updates from remote sources."""
 
 from __future__ import annotations
 
@@ -17,10 +17,11 @@ from typing import Any
 import yaml
 
 from constants import GITHUB_CLONE_URL
-from manager import LOCK_PATH, _load_lock, _update_lock_install, install_skill
+from diff_util import diff_folders, merge_folders
+from manager import _load_lock, _update_lock_install, install_skill
 from scanner import HOME, _read_frontmatter, scan_all
 
-USER_AGENT = "skill-manager/2.2"
+USER_AGENT = "skill-manager/2.3"
 
 
 def _now_iso() -> str:
@@ -63,7 +64,7 @@ def _fetch_text(url: str, timeout: int = 20) -> str:
 def _local_skill_info(folder: Path) -> dict[str, Any]:
     skill_md = folder / "SKILL.md"
     if not skill_md.exists():
-        return {"version": None, "skill_md_hash": None}
+        return {"version": None, "skill_md_hash": None, "folder_hash": compute_folder_hash(folder)}
     text = skill_md.read_text(encoding="utf-8")
     meta, _ = _read_frontmatter(text)
     return {
@@ -71,6 +72,18 @@ def _local_skill_info(folder: Path) -> dict[str, Any]:
         "skill_md_hash": hashlib.sha1(text.encode("utf-8")).hexdigest(),
         "folder_hash": compute_folder_hash(folder),
     }
+
+
+def _compare_versions(local: str | None, remote: str | None) -> str | None:
+    if not remote:
+        return None
+    if not local:
+        return "update_available"
+    if parse_version(remote) > parse_version(local):
+        return "update_available"
+    if parse_version(remote) < parse_version(local):
+        return "local_ahead"
+    return "same_version"
 
 
 def _resolve_update_status(
@@ -96,18 +109,6 @@ def _resolve_update_status(
     if md_only and local_hash != remote_hash:
         return "update_available"
     return "content_diff"
-
-
-def _compare_versions(local: str | None, remote: str | None) -> str | None:
-    if not remote:
-        return None
-    if not local:
-        return "update_available"
-    if parse_version(remote) > parse_version(local):
-        return "update_available"
-    if parse_version(remote) < parse_version(local):
-        return "local_ahead"
-    return "same_version"
 
 
 def _clone_github_repo(git_url: str, cache: dict[str, Path]) -> Path | None:
@@ -144,138 +145,221 @@ def _github_skill_dir(repo_dir: Path, skill_path: str | None, folder_name: str) 
     return matches[0].parent if len(matches) == 1 else None
 
 
-def _check_github_skill(
-    skill: dict[str, Any],
-    lock: dict[str, Any],
-    repo_cache: dict[str, Path],
-    temp_dirs: list[Path],
-) -> dict[str, Any]:
-    git_url = lock.get("sourceUrl") or skill.get("source_url")
-    if not git_url:
-        return {"status": "unknown", "reason": "缺少 GitHub 地址"}
-
-    repo_dir = _clone_github_repo(git_url, repo_cache)
-    if not repo_dir:
-        return {"status": "error", "reason": "无法拉取 GitHub 仓库"}
-
-    remote_dir = _github_skill_dir(repo_dir, lock.get("skillPath"), skill["folder_name"])
-    if not remote_dir:
-        return {"status": "error", "reason": "仓库中未找到对应 skill 目录"}
-
-    local_dir = Path(skill["resolved_path"])
-    local_info = _local_skill_info(local_dir)
-    remote_info = _local_skill_info(remote_dir)
-    locked_hash = lock.get("skillFolderHash") or ""
-
-    version_status = _compare_versions(local_info["version"], remote_info["version"])
-    local_hash = local_info["folder_hash"]
-    remote_hash = remote_info["folder_hash"]
-    status = _resolve_update_status(
-        version_status=version_status,
-        local_hash=local_hash,
-        remote_hash=remote_hash,
-        locked_hash=locked_hash or None,
-    )
-
-    return {
-        "status": status,
-        "source_type": "github",
-        "remote_url": git_url,
-        "local_version": local_info["version"],
-        "remote_version": remote_info["version"],
-        "local_hash": local_hash,
-        "remote_hash": remote_hash,
-        "locked_hash": locked_hash or None,
-    }
-
-
-def _well_known_folder_url(source_url: str) -> str | None:
-    if not source_url.endswith("/SKILL.md"):
-        return None
-    return source_url[: -len("/SKILL.md")] + "/"
-
-
-def _check_well_known_skill(skill: dict[str, Any], lock: dict[str, Any]) -> dict[str, Any]:
-    source_url = lock.get("sourceUrl") or skill.get("source_url")
-    if not source_url:
-        return {"status": "unknown", "reason": "缺少远程地址"}
-
-    local_dir = Path(skill["resolved_path"])
-    local_info = _local_skill_info(local_dir)
-
-    try:
-        remote_text = _fetch_text(source_url)
-    except (urllib.error.URLError, TimeoutError) as exc:
-        return {"status": "error", "reason": f"拉取远程 SKILL.md 失败: {exc}"}
-
-    remote_meta, _ = _read_frontmatter(remote_text)
-    remote_version = version_label(str(remote_meta.get("version") or ""))
-    remote_skill_hash = hashlib.sha1(remote_text.encode("utf-8")).hexdigest()
-    version_status = _compare_versions(local_info["version"], remote_version)
-    status = _resolve_update_status(
-        version_status=version_status,
-        local_hash=local_info["skill_md_hash"],
-        remote_hash=remote_skill_hash,
-        locked_hash=lock.get("skillFolderHash") or None,
-        md_only=True,
-    )
-
-    return {
-        "status": status,
-        "source_type": "well-known",
-        "remote_url": source_url,
-        "local_version": local_info["version"],
-        "remote_version": remote_version,
-        "local_hash": local_info["skill_md_hash"],
-        "remote_hash": remote_skill_hash,
-        "detail": "基于远程 SKILL.md 的 version 与内容哈希判断",
-    }
-
-
-def _check_single_skill(
-    skill: dict[str, Any],
-    lock_map: dict[str, Any],
-    repo_cache: dict[str, Path],
-) -> dict[str, Any]:
+def _prepare_lock(skill: dict[str, Any], lock: dict[str, Any]) -> dict[str, Any]:
     folder_name = skill["folder_name"]
-    lock = lock_map.get(folder_name, {})
     source_type = (lock.get("sourceType") or skill.get("source_type") or "").lower()
-
-    if skill["category"] in {"grok-bundled", "package", "marketplace"}:
-        return {
-            "status": "not_checkable",
-            "reason": "该类型 skill 由运行时自身管理更新",
-        }
-
     if folder_name == "skill-manager" or lock.get("sourceUrl") == GITHUB_CLONE_URL:
-        source_type = "github"
-        lock = {
+        return {
             **lock,
             "sourceType": "github",
             "sourceUrl": GITHUB_CLONE_URL,
             "skillPath": "SKILL.md",
         }
+    return lock
+
+
+def fetch_remote_skill_dir(skill: dict[str, Any], lock: dict[str, Any], repo_cache: dict[str, Path] | None = None) -> tuple[Path | None, dict[str, Any]]:
+    lock = _prepare_lock(skill, lock)
+    source_type = (lock.get("sourceType") or "").lower()
+    cache = repo_cache if repo_cache is not None else {}
 
     if source_type == "github":
-        return _check_github_skill(skill, lock, repo_cache, [])
-    if source_type == "well-known":
-        return _check_well_known_skill(skill, lock)
-    if source_type in {"local", "manual", ""}:
-        return {"status": "unknown", "reason": "本地 skill，无远程源"}
+        git_url = lock.get("sourceUrl") or skill.get("source_url")
+        if not git_url:
+            return None, {"error": "缺少 GitHub 地址"}
+        repo_dir = _clone_github_repo(git_url, cache)
+        if not repo_dir:
+            return None, {"error": "无法拉取 GitHub 仓库"}
+        remote_dir = _github_skill_dir(repo_dir, lock.get("skillPath"), skill["folder_name"])
+        if not remote_dir:
+            return None, {"error": "仓库中未找到 skill 目录"}
+        return remote_dir, {"source_type": "github", "remote_url": git_url}
 
-    if lock.get("sourceUrl"):
-        if "github.com" in lock["sourceUrl"] or lock["sourceUrl"].endswith(".git"):
-            lock["sourceType"] = "github"
-            return _check_github_skill(skill, lock, repo_cache, [])
-        return _check_well_known_skill(skill, lock)
+    source_url = lock.get("sourceUrl") or skill.get("source_url")
+    if not source_url:
+        return None, {"error": "缺少远程地址"}
 
-    return {"status": "unknown", "reason": "无法识别更新源"}
+    temp_root = Path(tempfile.mkdtemp(prefix="skill-manager-wellknown-"))
+    remote_dir = temp_root / "remote"
+    remote_dir.mkdir(parents=True)
+    try:
+        remote_text = _fetch_text(source_url)
+    except (urllib.error.URLError, TimeoutError) as exc:
+        shutil.rmtree(temp_root, ignore_errors=True)
+        return None, {"error": f"拉取远程 SKILL.md 失败: {exc}"}
+    (remote_dir / "SKILL.md").write_text(remote_text, encoding="utf-8")
+    return remote_dir, {"source_type": "well-known", "remote_url": source_url, "temp_root": str(temp_root)}
 
 
-def check_updates(
-    names: list[str] | None = None,
-    max_workers: int = 8,
+def _classify_result(info: dict[str, Any]) -> dict[str, Any]:
+    diff = info.get("diff") or {}
+    official_update = bool(info.get("official_update"))
+    has_local = bool(diff.get("has_local_changes"))
+    has_remote = bool(diff.get("has_remote_changes"))
+    needs_merge = has_local and has_remote and info.get("status") not in {"up_to_date", "local_ahead"}
+
+    group = "up_to_date"
+    if info.get("status") in {"error", "unknown", "not_checkable"}:
+        group = info.get("status", "unknown")
+    elif official_update and needs_merge:
+        group = "official_with_local_changes"
+    elif official_update:
+        group = "official_update"
+    elif needs_merge:
+        group = "merge_needed"
+    elif has_local and not has_remote:
+        group = "local_modified"
+    elif has_remote and not has_local:
+        group = "remote_update"
+    elif info.get("status") in {"update_available", "content_diff"}:
+        group = "remote_update"
+
+    return {
+        "official_update": official_update,
+        "has_local_changes": has_local,
+        "has_remote_changes": has_remote,
+        "needs_merge": needs_merge,
+        "group": group,
+    }
+
+
+def _build_check_result(
+    skill: dict[str, Any],
+    lock: dict[str, Any],
+    repo_cache: dict[str, Path],
 ) -> dict[str, Any]:
+    local_dir = Path(skill["resolved_path"])
+    local_info = _local_skill_info(local_dir)
+    remote_dir, remote_meta = fetch_remote_skill_dir(skill, lock, repo_cache)
+
+    if remote_dir is None:
+        return {
+            "status": "error",
+            "reason": remote_meta.get("error", "无法获取远程版本"),
+            "local_version": local_info["version"],
+        }
+
+    remote_info = _local_skill_info(remote_dir)
+    locked_hash = lock.get("skillFolderHash") or ""
+    version_status = _compare_versions(local_info["version"], remote_info["version"])
+    md_only = remote_meta.get("source_type") == "well-known"
+    compare_local = local_info["skill_md_hash"] if md_only else local_info["folder_hash"]
+    compare_remote = remote_info["skill_md_hash"] if md_only else remote_info["folder_hash"]
+
+    status = _resolve_update_status(
+        version_status=version_status,
+        local_hash=compare_local,
+        remote_hash=compare_remote,
+        locked_hash=locked_hash or None,
+        md_only=md_only,
+    )
+
+    diff = diff_folders(local_dir, remote_dir)
+    if md_only:
+        extra_files = [path for path in diff.get("added_locally", []) if path != "SKILL.md"]
+        diff["local_extra_files"] = extra_files
+        diff["added_locally"] = [path for path in diff.get("added_locally", []) if path == "SKILL.md"]
+        parts = []
+        if diff.get("added_locally"):
+            parts.append(f"本地新增 {len(diff['added_locally'])} 个文件")
+        if diff.get("missing_locally"):
+            parts.append(f"官方新增 {len(diff['missing_locally'])} 个文件")
+        if diff.get("modified"):
+            parts.append(f"双方修改 {len(diff['modified'])} 个文件")
+        if extra_files:
+            parts.append(f"本地附属文件 {len(extra_files)} 个")
+        diff["summary"] = "；".join(parts) if parts else "无文件差异"
+        diff["diff_note"] = "well-known 源仅拉取 SKILL.md 比对；references/ 等目录列为本地附属文件"
+        diff["has_local_changes"] = bool(
+            diff.get("added_locally") or diff.get("modified") or extra_files
+        )
+    official_update = version_status == "update_available" and bool(remote_info["version"])
+
+    result = {
+        "status": status,
+        "source_type": remote_meta.get("source_type"),
+        "remote_url": remote_meta.get("remote_url"),
+        "local_version": local_info["version"],
+        "remote_version": remote_info["version"],
+        "local_hash": compare_local,
+        "remote_hash": compare_remote,
+        "locked_hash": locked_hash or None,
+        "official_update": official_update,
+        "diff": diff,
+        "local_changes": {
+            "added_files": diff.get("added_locally", []),
+            "modified_files": [item["path"] for item in diff.get("modified", [])],
+            "extra_files": diff.get("local_extra_files", []),
+            "summary": diff.get("summary"),
+            "diff_note": diff.get("diff_note"),
+        },
+    }
+    result.update(_classify_result(result))
+    return result
+
+
+def _check_single_skill(skill: dict[str, Any], lock_map: dict[str, Any], repo_cache: dict[str, Path]) -> dict[str, Any]:
+    if skill["category"] in {"grok-bundled", "package", "marketplace"}:
+        return {"status": "not_checkable", "reason": "该类型 skill 由运行时自身管理更新", "group": "not_checkable"}
+
+    lock = _prepare_lock(skill, lock_map.get(skill["folder_name"], {}))
+    source_type = (lock.get("sourceType") or skill.get("source_type") or "").lower()
+
+    if source_type in {"local", "manual"} and not lock.get("sourceUrl"):
+        return {"status": "unknown", "reason": "本地 skill，无远程源", "group": "unknown"}
+
+    if source_type == "github" or (lock.get("sourceUrl") and ("github.com" in lock["sourceUrl"] or lock["sourceUrl"].endswith(".git"))):
+        return _build_check_result(skill, lock, repo_cache)
+
+    if source_type == "well-known" or lock.get("sourceUrl"):
+        return _build_check_result(skill, lock, repo_cache)
+
+    return {"status": "unknown", "reason": "无法识别更新源", "group": "unknown"}
+
+
+def _build_summary(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    buckets: dict[str, list[dict[str, Any]]] = {
+        "official_updates": [],
+        "remote_updates": [],
+        "local_modified": [],
+        "merge_needed": [],
+        "official_with_local_changes": [],
+    }
+
+    for name, info in results.items():
+        if info.get("status") in {"not_checkable", "unknown", "error", "up_to_date"}:
+            continue
+        group = info.get("group")
+        item = {
+            "name": name,
+            "local_version": info.get("local_version"),
+            "remote_version": info.get("remote_version"),
+            "local_changes": info.get("local_changes"),
+            "diff": info.get("diff"),
+            "status": info.get("status"),
+            "needs_merge": info.get("needs_merge"),
+        }
+        if group in buckets:
+            buckets[group].append(item)
+        elif info.get("official_update"):
+            buckets["official_updates"].append(item)
+        elif info.get("needs_merge"):
+            buckets["merge_needed"].append(item)
+        elif info.get("has_local_changes"):
+            buckets["local_modified"].append(item)
+        elif info.get("has_remote_changes"):
+            buckets["remote_updates"].append(item)
+
+    return {
+        "official_updates_count": len(buckets["official_updates"]) + len(buckets["official_with_local_changes"]),
+        "remote_updates_count": len(buckets["remote_updates"]),
+        "local_modified_count": len(buckets["local_modified"]),
+        "merge_needed_count": len(buckets["merge_needed"]) + len(buckets["official_with_local_changes"]),
+        **buckets,
+    }
+
+
+def check_updates(names: list[str] | None = None, max_workers: int = 8) -> dict[str, Any]:
     data = scan_all()
     lock_map = _load_lock().get("skills", {})
     skills = data["skills"]
@@ -284,38 +368,29 @@ def check_updates(
         wanted = {name.strip() for name in names}
         skills = [skill for skill in skills if skill["folder_name"] in wanted or skill["name"] in wanted]
 
-    checkable = [
-        skill
-        for skill in skills
-        if skill["category"] not in {"grok-bundled", "package", "marketplace"}
-    ]
-
+    checkable = [skill for skill in skills if skill["category"] not in {"grok-bundled", "package", "marketplace"}]
     repo_cache: dict[str, Path] = {}
     results: dict[str, dict[str, Any]] = {}
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {
-            pool.submit(_check_single_skill, skill, lock_map, repo_cache): skill
-            for skill in checkable
-        }
+        futures = {pool.submit(_check_single_skill, skill, lock_map, repo_cache): skill for skill in checkable}
         for future in as_completed(futures):
             skill = futures[future]
             try:
                 results[skill["folder_name"]] = future.result()
             except Exception as exc:  # noqa: BLE001
-                results[skill["folder_name"]] = {"status": "error", "reason": str(exc)}
+                results[skill["folder_name"]] = {"status": "error", "reason": str(exc), "group": "error"}
 
     for skill in skills:
         if skill["folder_name"] not in results:
-            results[skill["folder_name"]] = {
-                "status": "not_checkable",
-                "reason": "未纳入远程检查",
-            }
+            results[skill["folder_name"]] = {"status": "not_checkable", "reason": "未纳入远程检查", "group": "not_checkable"}
 
+    summary = _build_summary(results)
     updates_available = [
         name
         for name, info in results.items()
-        if info.get("status") in {"update_available", "content_diff"}
+        if info.get("group") in {"official_update", "official_with_local_changes", "remote_update", "merge_needed"}
+        or info.get("status") in {"update_available", "content_diff"}
     ]
 
     return {
@@ -323,34 +398,68 @@ def check_updates(
         "total_checked": len(checkable),
         "updates_available_count": len(updates_available),
         "updates_available": updates_available,
+        "summary": summary,
         "results": results,
+    }
+
+
+def merge_skill_integrated(name: str) -> dict[str, Any]:
+    data = scan_all()
+    skill = next((item for item in data["skills"] if item["folder_name"] == name or item["name"] == name), None)
+    if not skill:
+        raise FileNotFoundError(f"未找到 Skill: {name}")
+
+    lock_map = _load_lock().get("skills", {})
+    lock = _prepare_lock(skill, lock_map.get(skill["folder_name"], {}))
+    local_dir = Path(skill["resolved_path"])
+    remote_dir, remote_meta = fetch_remote_skill_dir(skill, lock)
+
+    if remote_dir is None:
+        raise ValueError(remote_meta.get("error", "无法获取远程版本"))
+
+    merge_result = merge_folders(local_dir, remote_dir)
+
+    if lock.get("sourceType") == "github" or remote_meta.get("source_type") == "github":
+        new_hash = compute_folder_hash(local_dir)
+        lock_data = _load_lock()
+        entry = lock_data.setdefault("skills", {}).setdefault(skill["folder_name"], {})
+        entry["skillFolderHash"] = new_hash
+        entry["updatedAt"] = _now_iso()
+        from manager import _save_lock
+
+        _save_lock(lock_data)
+
+    return {
+        "ok": True,
+        "action": "merge",
+        "name": skill["folder_name"],
+        "local_version": skill.get("local_version"),
+        "remote_version": None,
+        "backup_path": merge_result["backup_path"],
+        "diff": merge_result["diff"],
+        "actions": merge_result["actions"],
+        "merged_files": merge_result["merged_files"],
     }
 
 
 def upgrade_skill(name: str, scope: str | None = None) -> dict[str, Any]:
     data = scan_all()
-    skill = next(
-        (item for item in data["skills"] if item["folder_name"] == name or item["name"] == name),
-        None,
-    )
+    skill = next((item for item in data["skills"] if item["folder_name"] == name or item["name"] == name), None)
     if not skill:
         raise FileNotFoundError(f"未找到 Skill: {name}")
 
     lock_map = _load_lock().get("skills", {})
     lock = lock_map.get(skill["folder_name"], {})
-    source_type = (lock.get("sourceType") or skill.get("source_type") or "").lower()
     git_url = lock.get("sourceUrl")
-    source_url = lock.get("sourceUrl") or skill.get("source_url")
+    source_type = (lock.get("sourceType") or skill.get("source_type") or "").lower()
 
     if skill["folder_name"] == "skill-manager":
         git_url = GITHUB_CLONE_URL
         source_type = "github"
 
-    target_scope = scope or (
-        "agents" if skill["category"] == "agents-shared" else "grok"
-    )
+    target_scope = scope or ("agents" if skill["category"] == "agents-shared" else "grok")
 
-    if source_type == "github" or (git_url and (".git" in git_url or "github.com" in git_url)):
+    if source_type == "github" or (git_url and ("github.com" in git_url or git_url.endswith(".git"))):
         result = install_skill(
             name=skill["folder_name"],
             scope=target_scope,
@@ -358,23 +467,13 @@ def upgrade_skill(name: str, scope: str | None = None) -> dict[str, Any]:
             skill_subpath=str(Path(lock["skillPath"]).parent.as_posix()) if lock.get("skillPath") else None,
             overwrite=True,
         )
-    elif source_url:
-        raise NotImplementedError(
-            "well-known skill 暂不支持一键升级，请使用对应安装器或重新 install。"
-        )
     else:
-        raise ValueError(f"Skill `{name}` 没有可升级的远程源")
+        return merge_skill_integrated(name)
 
     if target_scope in {"agents", "project-agents"}:
-        _update_lock_install(skill["folder_name"], git_url or source_url or "github", "github", git_url)
+        _update_lock_install(skill["folder_name"], git_url or "github", "github", git_url)
 
-    return {
-        "ok": True,
-        "action": "upgrade",
-        "name": skill["folder_name"],
-        "scope": target_scope,
-        "install": result,
-    }
+    return {"ok": True, "action": "upgrade", "name": skill["folder_name"], "scope": target_scope, "install": result}
 
 
 def merge_updates_into_scan(scan_data: dict[str, Any], update_data: dict[str, Any]) -> dict[str, Any]:
@@ -387,12 +486,24 @@ def merge_updates_into_scan(scan_data: dict[str, Any], update_data: dict[str, An
         item["update_reason"] = info.get("reason")
         item["local_version"] = info.get("local_version") or item.get("local_version")
         item["remote_version"] = info.get("remote_version")
-        item["has_update"] = info.get("status") in {"update_available", "content_diff"}
+        item["update_group"] = info.get("group")
+        item["official_update"] = info.get("official_update", False)
+        item["needs_merge"] = info.get("needs_merge", False)
+        item["local_changes"] = info.get("local_changes")
+        item["diff"] = info.get("diff")
+        item["has_update"] = info.get("group") in {
+            "official_update",
+            "official_with_local_changes",
+            "remote_update",
+            "merge_needed",
+        } or info.get("status") in {"update_available", "content_diff"}
+        item["has_local_changes"] = info.get("has_local_changes", False)
         skills.append(item)
     merged["skills"] = skills
     merged["updates"] = {
         "checked_at": update_data["checked_at"],
         "updates_available_count": update_data["updates_available_count"],
         "updates_available": update_data["updates_available"],
+        "summary": update_data.get("summary", {}),
     }
     return merged
