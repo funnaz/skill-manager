@@ -60,6 +60,7 @@
     .skill-desc { font-size: 13px; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
     .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag { font-size: 11px; padding: 4px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+    .tag.update { background: rgba(251,191,36,.15); border-color: rgba(251,191,36,.45); color: #fde68a; }
     .detail { overflow: auto; max-height: 72vh; }
     .detail h2 { margin: 0 0 8px; font-size: 24px; }
     .detail .sub { font-size: 13px; margin-bottom: 16px; }
@@ -94,6 +95,7 @@
         <p><a class="github-link" id="githubLink" href="#" target="_blank" rel="noreferrer">GitHub 仓库</a></p>
       </div>
       <div class="actions">
+        <button id="checkUpdatesBtn">检查更新</button>
         <button id="exportBtn">导出报告</button>
         <button id="batchDeleteBtn" class="danger">批量删除</button>
         <button id="createBtn">新建 Skill</button>
@@ -170,7 +172,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all" };
+    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all", withUpdates: false };
     const $ = (id) => document.getElementById(id);
     const toast = (msg) => { const el = $("toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 3200); };
     const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -186,7 +188,8 @@
 
     function renderStats() {
       const { totals, project } = state.data;
-      $("stats").innerHTML = [["Skill 总数", totals.skills],["已配置 Agent", totals.agents_configured],["多 Agent 共享", totals.shared_skills],["已禁用", totals.disabled]]
+      const updateCount = state.data.updates?.updates_available_count ?? state.data.skills.filter(s => s.has_update).length;
+      $("stats").innerHTML = [["Skill 总数", totals.skills],["可更新", updateCount],["多 Agent 共享", totals.shared_skills],["已禁用", totals.disabled]]
         .map(([l,v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
       if (project?.github_url) {
         const link = $("githubLink");
@@ -227,7 +230,7 @@
           ${s.deletable ? `<input class="pick" type="checkbox" data-pick="${escapeHtml(s.id)}" ${state.selectedBatch.has(s.id)?"checked":""} />` : ""}
           <div class="skill-title"><h3>${escapeHtml(s.name)}</h3><span class="tag">${escapeHtml(s.category)}</span></div>
           <div class="skill-desc">${escapeHtml(s.description || "无描述")}</div>
-          <div class="tag-row">${s.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("")}${s.disabled ? '<span class="tag">已禁用</span>' : ""}${s.deletable ? "" : '<span class="tag">受保护</span>'}</div>
+          <div class="tag-row">${s.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("")}${s.has_update ? '<span class="tag update">有新版本</span>' : ""}${s.local_version ? `<span class="tag">v${escapeHtml(s.local_version)}</span>` : ""}${s.disabled ? '<span class="tag">已禁用</span>' : ""}${s.deletable ? "" : '<span class="tag">受保护</span>'}</div>
         </article>`).join("") : `<div class="empty">没有匹配的 Skill</div>`;
     }
 
@@ -241,6 +244,7 @@
         <div class="detail-actions">
           ${skill.deletable ? `<button class="danger" id="deleteSelectedBtn">删除此 Skill</button>` : `<button disabled title="${escapeHtml(skill.delete_reason)}">不可删除</button>`}
           ${skill.disabled ? `<button id="enableSelectedBtn">启用</button>` : `<button id="disableSelectedBtn">禁用</button>`}
+          ${skill.has_update ? `<button class="primary" id="upgradeSelectedBtn">升级到最新版</button>` : ""}
         </div>
         <div class="detail-section"><h4>安装到哪些 Agent</h4><div class="tag-row">${skill.agent_labels.length ? skill.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("") : `<span class="tag">仅磁盘存在</span>`}</div></div>
         <div class="detail-section"><h4>元信息</h4><div class="kv">
@@ -248,7 +252,10 @@
           <div><span>分类</span><span>${escapeHtml(skill.category)}</span></div>
           <div><span>路径</span><span>${escapeHtml(skill.resolved_path)}</span></div>
           ${skill.source ? `<div><span>来源</span><span>${escapeHtml(skill.source)}</span></div>` : ""}
-          <div><span>可删除</span><span>${skill.deletable ? "是" : escapeHtml(skill.delete_reason)}</span></div>
+            <div><span>本地版本</span><span>${escapeHtml(skill.local_version || "-")}</span></div>
+            <div><span>远程版本</span><span>${escapeHtml(skill.remote_version || "-")}</span></div>
+            <div><span>更新状态</span><span>${escapeHtml(skill.update_status || "未检查")}</span></div>
+            <div><span>可删除</span><span>${skill.deletable ? "是" : escapeHtml(skill.delete_reason)}</span></div>
         </div></div>
         <div class="detail-section"><h4>SKILL.md</h4><pre class="markdown">${escapeHtml(content.raw || "")}</pre></div>`;
       const delBtn = $("deleteSelectedBtn");
@@ -257,6 +264,16 @@
       if (disableBtn) disableBtn.onclick = () => toggleSkill(skill, "disable");
       const enableBtn = $("enableSelectedBtn");
       if (enableBtn) enableBtn.onclick = () => toggleSkill(skill, "enable");
+      const upgradeBtn = $("upgradeSelectedBtn");
+      if (upgradeBtn) upgradeBtn.onclick = () => upgradeSkill(skill);
+    }
+
+    async function upgradeSkill(skill) {
+      if (!confirm(`确认将 ${skill.name} 升级到最新版？`)) return;
+      await api("/api/skills/upgrade", "POST", { name: skill.folder_name });
+      toast(`已升级 ${skill.name}`);
+      state.withUpdates = true;
+      await loadData();
     }
 
     async function toggleSkill(skill, action) {
@@ -286,7 +303,8 @@
 
     async function loadData() {
       document.body.classList.add("loading");
-      state.data = await api("/api/scan");
+      const query = state.withUpdates ? "?check_updates_flag=true" : "";
+      state.data = await api(`/api/scan${query}`);
       if (!state.data.skills.some(s => s.id === state.selectedId)) state.selectedId = state.data.skills[0]?.id || null;
       renderStats(); renderAgents(); renderCategoryFilters(); renderSkillList();
       const selected = state.data.skills.find(s => s.id === state.selectedId);
@@ -306,7 +324,16 @@
       const c = e.target.closest("[data-id]"); if (!c) return;
       state.selectedId = c.dataset.id; renderSkillList(); renderDetail(state.data.skills.find(s => s.id === state.selectedId));
     };
-    $("refreshBtn").onclick = loadData;
+    $("refreshBtn").onclick = () => { state.withUpdates = false; loadData(); };
+    $("checkUpdatesBtn").onclick = async () => {
+      document.body.classList.add("loading");
+      toast("正在检查远程版本...");
+      state.withUpdates = true;
+      await loadData();
+      const count = state.data.updates?.updates_available_count ?? 0;
+      toast(count ? `发现 ${count} 个可更新 skill` : "所有可检查 skill 均为最新");
+      document.body.classList.remove("loading");
+    };
     $("batchDeleteBtn").onclick = batchDeleteSelected;
     $("exportBtn").onclick = async () => {
       const blob = await fetch("/api/export?fmt=markdown").then(r => r.blob());

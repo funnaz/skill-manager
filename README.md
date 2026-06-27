@@ -86,6 +86,19 @@ python cli.py delete --name my-skill
 python cli.py delete --batch "old-skill,another-skill"
 ```
 
+### 检测新版本
+
+```bash
+python cli.py check-updates
+python cli.py check-updates --names "dbs,lark-doc"
+```
+
+### 升级 Skill（GitHub 源）
+
+```bash
+python cli.py upgrade --name dbs
+```
+
 ### 导出报告
 
 ```bash

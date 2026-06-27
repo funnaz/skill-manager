@@ -1,7 +1,7 @@
 ---
 name: skill-manager
 description: |
-  管理本机 Agent Skills：扫描、可视化、创建、安装、禁用、删除、导出报告。
+  管理本机 Agent Skills：扫描、可视化、创建、安装、检测新版本、升级、禁用、删除、导出报告。
   触发方式：/skill-manager、/skill管家、「帮我管理 skill」「安装新 skill」「删除无用 skill」「禁用 skill」「导出 skill 报告」「打开 skill 面板」
   Manage local agent skills: scan, visualize, create, install, disable, delete, export.
   Trigger: /skill-manager, "manage my skills", "install a skill", "delete unused skill", "disable skill", "export skill report", "open skill dashboard".
@@ -139,7 +139,30 @@ python <skill-manager-root>/cli.py delete --name <skill-name>
 python <skill-manager-root>/cli.py delete --batch "old-skill,another-skill"
 ```
 
-### 7. 导出报告
+### 7. 检测新版本
+
+```bash
+python <skill-manager-root>/cli.py check-updates
+python <skill-manager-root>/cli.py check-updates --names "dbs,lark-doc"
+python <skill-manager-root>/cli.py check-updates --merge
+```
+
+检查逻辑：
+- **GitHub 源**：拉取仓库并比较 skill 目录内容哈希
+- **well-known 源**（如飞书 lark skills）：拉取远程 `SKILL.md`，比较 `version` 与内容哈希
+- 状态包括：`up_to_date`、`update_available`、`local_modified`、`content_diff`
+
+### 8. 升级 Skill
+
+仅支持 GitHub 源一键升级：
+
+```bash
+python <skill-manager-root>/cli.py upgrade --name dbs
+```
+
+well-known 源若检测到更新，提示用户用原安装器重新同步。
+
+### 9. 导出报告
 
 ```bash
 python <skill-manager-root>/cli.py export --format markdown --output skill-report.md

@@ -17,8 +17,9 @@ from constants import GITHUB_URL
 from manager import batch_delete, create_skill, delete_skill, install_skill
 from report import build_markdown_report, export_report
 from scanner import read_skill_content, scan_all
+from updater import check_updates, merge_updates_into_scan, upgrade_skill
 
-APP = FastAPI(title="Skill Manager", version="2.1.0")
+APP = FastAPI(title="Skill Manager", version="2.2.0")
 STATIC_DIR = Path(__file__).parent / "static"
 PORT = 5520
 
@@ -55,14 +56,35 @@ class ToggleSkillRequest(BaseModel):
     name: str
 
 
+class UpgradeSkillRequest(BaseModel):
+    name: str
+    scope: str | None = None
+
+
 @APP.get("/")
 async def index() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
 @APP.get("/api/scan")
-async def api_scan() -> dict[str, Any]:
-    return scan_all()
+async def api_scan(check_updates_flag: bool = False) -> dict[str, Any]:
+    data = scan_all()
+    if check_updates_flag:
+        return merge_updates_into_scan(data, check_updates())
+    return data
+
+
+@APP.get("/api/updates")
+async def api_updates() -> dict[str, Any]:
+    return check_updates()
+
+
+@APP.post("/api/skills/upgrade")
+async def api_upgrade(payload: UpgradeSkillRequest) -> dict[str, Any]:
+    try:
+        return upgrade_skill(payload.name, payload.scope)
+    except (ValueError, FileNotFoundError, NotImplementedError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @APP.get("/api/skill")
@@ -140,7 +162,7 @@ async def api_export(fmt: str = "json") -> Any:
 
 @APP.get("/health")
 async def health() -> dict[str, Any]:
-    return {"ok": True, "port": PORT, "version": "2.1.0", "github": GITHUB_URL}
+    return {"ok": True, "port": PORT, "version": "2.2.0", "github": GITHUB_URL}
 
 
 def main(open_browser: bool = True) -> None:

@@ -88,6 +88,10 @@ class SkillRecord:
     modified_at: str | None = None
     deletable: bool = True
     delete_reason: str = ""
+    local_version: str | None = None
+    update_status: str | None = None
+    remote_version: str | None = None
+    has_update: bool = False
 
 
 def _is_package_path(path: Path) -> bool:
@@ -218,6 +222,7 @@ def scan_all() -> dict[str, Any]:
             meta, body = _read_frontmatter(text)
             folder_name = parent.name
             name = str(meta.get("name") or folder_name)
+            local_version = str(meta.get("version") or "").strip() or None
             description = str(meta.get("description") or meta.get("metadata", {}).get("short-description", ""))
             description = " ".join(description.split())
             if not description:
@@ -247,6 +252,10 @@ def scan_all() -> dict[str, Any]:
                 "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
                 "deletable": True,
                 "delete_reason": "",
+                "local_version": local_version,
+                "update_status": None,
+                "remote_version": None,
+                "has_update": False,
             }
 
         if agent_key:

@@ -11,6 +11,7 @@ from constants import GITHUB_INSTALL_CMD, GITHUB_URL
 from manager import batch_delete, create_skill, delete_skill, install_skill
 from report import export_report
 from scanner import scan_all
+from updater import check_updates, merge_updates_into_scan, upgrade_skill
 
 
 def cmd_scan(_: argparse.Namespace) -> int:
@@ -61,6 +62,22 @@ def cmd_enable(args: argparse.Namespace) -> int:
 
 def cmd_export(args: argparse.Namespace) -> int:
     result = export_report(args.format, args.output)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_check_updates(args: argparse.Namespace) -> int:
+    updates = check_updates(args.names.split(",") if args.names else None)
+    if args.merge:
+        payload = merge_updates_into_scan(scan_all(), updates)
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(updates, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_upgrade(args: argparse.Namespace) -> int:
+    result = upgrade_skill(args.name, args.scope)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
@@ -118,6 +135,16 @@ def build_parser() -> argparse.ArgumentParser:
     export_p.add_argument("--format", default="json", choices=["json", "markdown"])
     export_p.add_argument("--output")
     export_p.set_defaults(func=cmd_export)
+
+    updates_p = sub.add_parser("check-updates", help="检测 skill 新版本")
+    updates_p.add_argument("--names", help="逗号分隔，仅检查指定 skill")
+    updates_p.add_argument("--merge", action="store_true", help="合并到 scan 结果输出")
+    updates_p.set_defaults(func=cmd_check_updates)
+
+    upgrade_p = sub.add_parser("upgrade", help="升级 skill 到远程最新版")
+    upgrade_p.add_argument("--name", required=True)
+    upgrade_p.add_argument("--scope")
+    upgrade_p.set_defaults(func=cmd_upgrade)
 
     serve_p = sub.add_parser("serve", help="启动 Web 面板")
     serve_p.add_argument("--host", default="127.0.0.1")

@@ -209,6 +209,7 @@ def install_skill(
     git_url: str | None = None,
     skill_subpath: str | None = None,
     description: str | None = None,
+    overwrite: bool = False,
 ) -> dict[str, Any]:
     dest_root = _resolve_scope(scope)
     dest_root.mkdir(parents=True, exist_ok=True)
@@ -243,7 +244,9 @@ def install_skill(
         skill_name = validate_skill_name(name or str(meta.get("name") or src.name))
         dest = dest_root / skill_name
         if dest.exists():
-            raise FileExistsError(f"Skill 已存在: {dest}")
+            if not overwrite:
+                raise FileExistsError(f"Skill 已存在: {dest}")
+            shutil.rmtree(dest)
 
         _copy_skill_dir(src, dest)
 
