@@ -633,6 +633,7 @@
         </div>
       </div>
       <div class="actions">
+        <button id="settingsBtn">默认设置</button>
         <button id="checkUpdatesBtn">检查更新</button>
         <div class="export-wrap">
           <button id="exportBtn">导出报告 ▾</button>
@@ -689,6 +690,22 @@
       <div class="modal-actions">
         <button data-close="createModal">取消</button>
         <button class="primary" id="createSubmit">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="settingsModal">
+    <div class="modal-card">
+      <h3>默认设置</h3>
+      <p>新建 / 安装 Skill 时，安装位置下拉框将把你的默认项置顶并预选。</p>
+      <div class="form-grid">
+        <label>默认安装位置
+          <select id="settingsDefaultScope"></select>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button data-close="settingsModal">取消</button>
+        <button class="primary" id="settingsSaveBtn">保存</button>
       </div>
     </div>
   </div>
@@ -765,15 +782,47 @@
       return `${home}${sep}${rel.split("/").filter(Boolean).join(sep)}`;
     }
 
-    function renderScopeSelects() {
+    function getDefaultScope() {
+      return state.data?.settings?.default_scope || "agents";
+    }
+
+    function orderedScopeOptions() {
+      const preferred = getDefaultScope();
+      const first = SCOPE_OPTIONS.find(([value]) => value === preferred) || SCOPE_OPTIONS[0];
+      const rest = SCOPE_OPTIONS
+        .filter(([value]) => value !== first[0])
+        .sort((a, b) => a[1].localeCompare(b[1], "zh-CN"));
+      return [first, ...rest];
+    }
+
+    function buildScopeOptionsHtml(selectedValue) {
       const home = state.data?.home || "~";
-      const html = SCOPE_OPTIONS.map(([value, label, rel], index) => {
+      return orderedScopeOptions().map(([value, label, rel]) => {
         const path = home === "~" ? `~/${rel}` : formatScopePath(home, rel);
-        const selected = index === 0 ? " selected" : "";
-        return `<option value="${value}"${selected}>${label}（${path}）</option>`;
+        const selected = value === selectedValue ? " selected" : "";
+        const star = value === getDefaultScope() ? "★ " : "";
+        return `<option value="${value}"${selected}>${star}${label}（${path}）</option>`;
       }).join("");
+    }
+
+    function renderScopeSelects() {
+      const defaultScope = getDefaultScope();
+      const html = buildScopeOptionsHtml(defaultScope);
       $("createScope").innerHTML = html;
       $("installScope").innerHTML = html;
+    }
+
+    function renderSettingsScopeSelect() {
+      const select = $("settingsDefaultScope");
+      const home = state.data?.home || "~";
+      const current = getDefaultScope();
+      select.innerHTML = [...SCOPE_OPTIONS]
+        .sort((a, b) => a[1].localeCompare(b[1], "zh-CN"))
+        .map(([value, label, rel]) => {
+          const path = home === "~" ? `~/${rel}` : formatScopePath(home, rel);
+          const selected = value === current ? " selected" : "";
+          return `<option value="${value}"${selected}>${label}（${path}）</option>`;
+        }).join("");
     }
 
     const STAT_META = [
@@ -1279,6 +1328,22 @@
       if (showToast) toast("已填入名称与功能描述");
       return result;
     }
+
+    $("settingsBtn").onclick = () => {
+      renderSettingsScopeSelect();
+      openModal("settingsModal");
+    };
+    $("settingsSaveBtn").onclick = async () => {
+      try {
+        const settings = await api("/api/settings", "POST", { default_scope: $("settingsDefaultScope").value });
+        if (state.data) state.data.settings = settings;
+        renderScopeSelects();
+        closeModal("settingsModal");
+        toast("默认安装位置已保存");
+      } catch (err) {
+        toast(err.message);
+      }
+    };
 
     $("createBtn").onclick = () => {
       $("createMd").value = "";

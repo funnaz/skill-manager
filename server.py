@@ -11,7 +11,7 @@ from urllib.parse import quote
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, PlainTextResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from config_io import disable_skill, enable_skill
 from constants import GITHUB_URL
@@ -20,6 +20,7 @@ from skill_parser import parse_skill_md
 from report import build_export_bytes, export_report
 from scanner import read_skill_content, scan_all
 from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
+from user_settings import load_settings, save_settings
 
 APP = FastAPI(title="Skill Manager", version="2.3.0")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -29,7 +30,7 @@ PORT = 5520
 class CreateSkillRequest(BaseModel):
     name: str | None = None
     description: str | None = None
-    scope: str = "agents"
+    scope: str = Field(default_factory=lambda: load_settings()["default_scope"])
     body: str | None = None
     skill_md: str | None = None
 
@@ -38,9 +39,13 @@ class ParseSkillMdRequest(BaseModel):
     content: str
 
 
+class SettingsRequest(BaseModel):
+    default_scope: str
+
+
 class InstallSkillRequest(BaseModel):
     name: str | None = None
-    scope: str = "agents"
+    scope: str = Field(default_factory=lambda: load_settings()["default_scope"])
     source_path: str | None = None
     git_url: str | None = None
     skill_subpath: str | None = None
@@ -76,9 +81,23 @@ async def index() -> FileResponse:
 @APP.get("/api/scan")
 async def api_scan(check_updates_flag: bool = False) -> dict[str, Any]:
     data = scan_all()
+    data["settings"] = load_settings()
     if check_updates_flag:
         return merge_updates_into_scan(data, check_updates())
     return data
+
+
+@APP.get("/api/settings")
+async def api_get_settings() -> dict[str, Any]:
+    return load_settings()
+
+
+@APP.post("/api/settings")
+async def api_save_settings(payload: SettingsRequest) -> dict[str, Any]:
+    try:
+        return save_settings({"default_scope": payload.default_scope})
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @APP.get("/api/updates")

@@ -13,6 +13,7 @@ from manager import batch_delete, create_skill, delete_skill, install_skill
 from report import export_report
 from scanner import scan_all
 from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
+from user_settings import load_settings
 
 
 def cmd_scan(_: argparse.Namespace) -> int:
@@ -24,15 +25,17 @@ def cmd_create(args: argparse.Namespace) -> int:
     skill_md = None
     if args.from_md:
         skill_md = Path(args.from_md).read_text(encoding="utf-8")
-    result = create_skill(args.name, args.description, args.scope, args.body, skill_md)
+    scope = args.scope or load_settings()["default_scope"]
+    result = create_skill(args.name, args.description, scope, args.body, skill_md)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
 
 def cmd_install(args: argparse.Namespace) -> int:
+    scope = args.scope or load_settings()["default_scope"]
     result = install_skill(
         name=args.name,
-        scope=args.scope,
+        scope=scope,
         source_path=args.from_path,
         git_url=args.git,
         skill_subpath=args.subpath,
@@ -113,14 +116,14 @@ def build_parser() -> argparse.ArgumentParser:
     create_p = sub.add_parser("create", help="创建新 skill")
     create_p.add_argument("--name")
     create_p.add_argument("--description")
-    create_p.add_argument("--scope", default="agents", choices=["agents", "codex", "cursor", "grok", "project-agents", "project-grok"])
+    create_p.add_argument("--scope", default=None, choices=["agents", "codex", "cursor", "grok", "project-agents", "project-grok"])
     create_p.add_argument("--body")
     create_p.add_argument("--from-md", dest="from_md", help="从 Markdown 文件导入并自动解析名称与描述")
     create_p.set_defaults(func=cmd_create)
 
     install_p = sub.add_parser("install", help="安装 skill")
     install_p.add_argument("--name")
-    install_p.add_argument("--scope", default="agents", choices=["agents", "codex", "cursor", "grok", "project-agents", "project-grok"])
+    install_p.add_argument("--scope", default=None, choices=["agents", "codex", "cursor", "grok", "project-agents", "project-grok"])
     install_p.add_argument("--from-path", dest="from_path")
     install_p.add_argument("--git")
     install_p.add_argument("--subpath")
