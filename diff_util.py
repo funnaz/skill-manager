@@ -15,6 +15,11 @@ from scanner import _read_frontmatter
 
 BACKUP_ROOT = Path.home() / ".skill-manager" / "backups"
 IGNORE_NAMES = {"__pycache__", ".git", ".DS_Store"}
+BUNDLED_PREFIXES = ("references/", "scripts/", "agents/")
+
+
+def is_bundled_path(rel: str) -> bool:
+    return any(rel.startswith(prefix) for prefix in BUNDLED_PREFIXES)
 
 
 def _file_digest(path: Path) -> str:
@@ -97,6 +102,31 @@ def _classify_change(rel: str) -> str:
     return "custom"
 
 
+def filter_diff_for_classification(diff: dict[str, Any], *, md_only: bool = False) -> dict[str, Any]:
+    """Remove bundled ancillary paths so they never affect update classification."""
+    filtered = dict(diff)
+    filtered["added_locally"] = [
+        path for path in diff.get("added_locally", [])
+        if not is_bundled_path(path) and (not md_only or path == "SKILL.md")
+    ]
+    filtered["missing_locally"] = [
+        path for path in diff.get("missing_locally", [])
+        if not is_bundled_path(path) and (not md_only or path == "SKILL.md")
+    ]
+    filtered["modified"] = [
+        item for item in diff.get("modified", [])
+        if not is_bundled_path(item.get("path", "")) and (not md_only or item.get("path") == "SKILL.md")
+    ]
+    filtered["has_local_changes"] = bool(filtered["added_locally"] or filtered["modified"])
+    filtered["has_remote_changes"] = bool(filtered["missing_locally"] or filtered["modified"])
+    filtered["summary"] = _summarize_diff(
+        filtered["added_locally"],
+        filtered["missing_locally"],
+        filtered["modified"],
+    )
+    return filtered
+
+
 def analyze_change_nature(
     diff: dict[str, Any],
     *,
@@ -104,8 +134,8 @@ def analyze_change_nature(
     locked_hash: str | None = None,
     local_folder_hash: str | None = None,
 ) -> dict[str, Any]:
-    """Distinguish real user edits from directory layout / outdated install drift."""
-    bundled_files = list(diff.get("local_extra_files", [])) if md_only else []
+    """Distinguish real user edits from outdated install drift."""
+    diff = filter_diff_for_classification(diff, md_only=md_only)
     added = list(diff.get("added_locally", []))
     modified = list(diff.get("modified", []))
 
@@ -119,14 +149,9 @@ def analyze_change_nature(
 
     user_edited = bool(custom_added or custom_modified)
     if not user_edited and locked_hash and local_folder_hash:
-        # 只有 lock 存在且整包哈希变了，同时有非 SKILL 官方资源被改，才算用户动过
         user_edited = bool(official_asset_modified) and local_folder_hash != locked_hash
 
-    has_remote_changes = bool(
-        diff.get("missing_locally")
-        or modified
-        or (md_only and skill_md_modified)
-    )
+    has_remote_changes = bool(diff.get("missing_locally") or modified)
     has_real_local_changes = bool(custom_added or custom_modified or (user_edited and skill_md_modified))
 
     if user_edited and has_remote_changes:
@@ -138,9 +163,6 @@ def analyze_change_nature(
     elif has_remote_changes:
         change_type = "official_outdated"
         change_label = "安装版本落后（非用户改动）"
-    elif md_only and bundled_files and not has_real_local_changes:
-        change_type = "bundled_layout"
-        change_label = "目录结构差异（非用户改动）"
     else:
         change_type = "none"
         change_label = "无实质差异"
@@ -153,16 +175,12 @@ def analyze_change_nature(
         "change_type": change_type,
         "change_label": change_label,
         "user_edited": user_edited,
-        "bundled_files": bundled_files,
-        "bundled_only": bool(bundled_files) and not has_real_local_changes and not has_remote_changes,
         "has_real_local_changes": has_real_local_changes,
         "has_remote_changes": has_remote_changes,
         "real_local_files": sorted(set(real_local_files)),
         "skill_md_changed": bool(skill_md_modified),
         "official_asset_changed": bool(official_asset_modified),
         "notes": _build_change_notes(
-            md_only=md_only,
-            bundled_files=bundled_files,
             skill_md_modified=skill_md_modified,
             user_edited=user_edited,
             has_remote_changes=has_remote_changes,
@@ -172,17 +190,11 @@ def analyze_change_nature(
 
 def _build_change_notes(
     *,
-    md_only: bool,
-    bundled_files: list[str],
     skill_md_modified: list[dict[str, Any]],
     user_edited: bool,
     has_remote_changes: bool,
 ) -> list[str]:
     notes: list[str] = []
-    if md_only and bundled_files:
-        notes.append(
-            f"references/ 等 {len(bundled_files)} 个文件是安装包自带目录，不是你的手改。"
-        )
     if skill_md_modified and not user_edited and has_remote_changes:
         notes.append("仅 SKILL.md 与官方不同，更像是安装版本落后，而不是你改了功能。")
     if not user_edited and has_remote_changes:
@@ -239,8 +251,17 @@ def _choose_merged_file(rel: str, local_path: Path, remote_path: Path) -> tuple[
     return local_path.read_text(encoding="utf-8"), "prefer_local"
 
 
-def merge_folders(local_dir: Path, remote_dir: Path) -> dict[str, Any]:
+def merge_folders(
+    local_dir: Path,
+    remote_dir: Path,
+    *,
+    md_only: bool = False,
+    overwrite_skill_md: bool = False,
+) -> dict[str, Any]:
     diff = diff_folders(local_dir, remote_dir)
+    if md_only:
+        diff = filter_diff_for_classification(diff, md_only=True)
+
     BACKUP_ROOT.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     backup_dir = BACKUP_ROOT / f"{local_dir.name}-{stamp}"
@@ -262,10 +283,14 @@ def merge_folders(local_dir: Path, remote_dir: Path) -> dict[str, Any]:
         rel = item["path"]
         local_path = local_dir / rel
         remote_path = remote_dir / rel
-        content, strategy = _choose_merged_file(rel, local_path, remote_path)
+        if rel == "SKILL.md" and overwrite_skill_md:
+            content = remote_path.read_text(encoding="utf-8")
+            strategy = "overwrite_skill_md"
+        else:
+            content, strategy = _choose_merged_file(rel, local_path, remote_path)
         local_path.write_text(content, encoding="utf-8")
         actions.append({"path": rel, "action": strategy})
-        if strategy == "merged_skill_md":
+        if strategy in {"merged_skill_md", "overwrite_skill_md"}:
             conflicts.append(rel)
 
     return {

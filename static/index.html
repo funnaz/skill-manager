@@ -298,27 +298,22 @@
       const diff = skill.diff;
       if (!lc && !diff) return "";
       const added = lc?.added_files || diff?.added_locally || [];
-      const extra = lc?.extra_files || diff?.local_extra_files || [];
       const modified = lc?.modified_files || (diff?.modified || []).map(i => i.path);
       const missing = diff?.missing_locally || [];
-      const note = lc?.diff_note || diff?.diff_note || "";
-      if (!added.length && !modified.length && !missing.length && !extra.length) return "";
+      if (!added.length && !modified.length && !missing.length) return "";
       return `<div class="detail-section"><h4>本地 / 官方差异</h4><ul class="change-list">
         ${added.map(f => `<li>本地新增：${escapeHtml(f)}</li>`).join("")}
         ${modified.map(f => `<li>双方修改：${escapeHtml(f)}</li>`).join("")}
         ${missing.map(f => `<li>官方新增：${escapeHtml(f)}</li>`).join("")}
-        ${extra.map(f => `<li>本地附属：${escapeHtml(f)}</li>`).join("")}
-      </ul><div class="sub">${escapeHtml(note || lc?.summary || diff?.summary || "")}</div></div>`;
+      </ul><div class="sub">${escapeHtml(lc?.summary || diff?.summary || "")}</div></div>`;
     }
 
     function renderUpdateItem(item, actions = true) {
       const real = item.local_changes?.real_files || [];
-      const bundled = item.local_changes?.bundled_files || item.local_changes?.extra_files || item.diff?.local_extra_files || [];
       const modified = item.local_changes?.modified_files || (item.diff?.modified || []).map(i => i.path);
       const missing = item.diff?.missing_locally || [];
       const notes = item.local_changes?.notes || [];
       const label = item.change_label || item.local_changes?.summary || "";
-      const note = item.local_changes?.diff_note || item.diff?.diff_note || "";
       const versionText = item.local_version || item.remote_version
         ? `${escapeHtml(item.local_version || "-")} → ${escapeHtml(item.remote_version || "-")}`
         : "版本未标注";
@@ -332,11 +327,9 @@
           ${real.map(f => `<li>你的功能改动：${escapeHtml(f)}</li>`).join("")}
           ${!real.length && modified.length && !item.user_edited ? modified.map(f => `<li>官方更新文件：${escapeHtml(f)}</li>`).join("") : ""}
           ${missing.map(f => `<li>官方新增：${escapeHtml(f)}</li>`).join("")}
-          ${bundled.length ? `<li>安装包目录（非手改）：${bundled.length} 个文件</li>` : ""}
-          ${!(real.length || modified.length || missing.length || bundled.length) ? `<li>${escapeHtml(label || "存在版本或内容差异")}</li>` : ""}
+          ${!(real.length || modified.length || missing.length) ? `<li>${escapeHtml(label || "存在版本或内容差异")}</li>` : ""}
         </ul>
         ${notes.map(n => `<div class="sub">• ${escapeHtml(n)}</div>`).join("")}
-        ${note ? `<div class="sub">${escapeHtml(note)}</div>` : ""}
         ${actions ? `<div class="mini-actions" style="margin-top:10px;">
           ${item.needs_merge ? `<button class="primary" data-merge="${escapeHtml(item.name)}">整合更新</button>` : ""}
           ${item.user_edited ? "" : `<button class="primary" data-upgrade="${escapeHtml(item.name)}">直接升级</button>`}
@@ -353,7 +346,6 @@
         ["merge_needed", "需要整合", "你改过功能，官方也更新了，建议整合保留本地定制"],
         ["remote_updates", "安装版本落后", "官方内容有变，但你没有实际功能改动，可直接升级"],
         ["local_modified", "仅你有功能改动", "主要是你本地新增/修改了功能文件"],
-        ["bundled_layout", "目录结构差异（可忽略）", "references/ 等是安装包自带目录，不是你的手改"],
       ];
       const html = sections.map(([key, title, desc]) => {
         const items = summary[key] || [];

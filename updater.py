@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 from constants import GITHUB_CLONE_URL
-from diff_util import analyze_change_nature, diff_folders, merge_folders
+from diff_util import analyze_change_nature, diff_folders, filter_diff_for_classification, merge_folders
 from manager import _load_lock, _update_lock_install, install_skill
 from scanner import HOME, _read_frontmatter, scan_all
 
@@ -204,8 +204,6 @@ def _classify_result(info: dict[str, Any]) -> dict[str, Any]:
     group = "up_to_date"
     if info.get("status") in {"error", "unknown", "not_checkable"}:
         group = info.get("status", "unknown")
-    elif change_type == "bundled_layout":
-        group = "bundled_layout"
     elif official_update and needs_merge:
         group = "official_with_local_changes"
     elif official_update:
@@ -263,22 +261,7 @@ def _build_check_result(
     )
 
     diff = diff_folders(local_dir, remote_dir)
-    if md_only:
-        extra_files = [path for path in diff.get("added_locally", []) if path != "SKILL.md"]
-        diff["local_extra_files"] = extra_files
-        diff["added_locally"] = [path for path in diff.get("added_locally", []) if path == "SKILL.md"]
-        parts = []
-        if diff.get("added_locally"):
-            parts.append(f"本地新增 {len(diff['added_locally'])} 个文件")
-        if diff.get("missing_locally"):
-            parts.append(f"官方新增 {len(diff['missing_locally'])} 个文件")
-        if diff.get("modified"):
-            parts.append(f"双方修改 {len(diff['modified'])} 个文件")
-        if extra_files:
-            parts.append(f"本地附属文件 {len(extra_files)} 个")
-        diff["summary"] = "；".join(parts) if parts else "无文件差异"
-        diff["diff_note"] = "well-known 源仅拉取 SKILL.md 比对；references/ 等是安装包目录，不算用户改动"
-        diff["has_local_changes"] = bool(diff.get("added_locally") or diff.get("modified"))
+    diff = filter_diff_for_classification(diff, md_only=md_only)
 
     nature = analyze_change_nature(
         diff,
@@ -307,10 +290,7 @@ def _build_check_result(
             "added_files": diff.get("added_locally", []),
             "modified_files": [item["path"] for item in diff.get("modified", [])],
             "real_files": nature.get("real_local_files", []),
-            "bundled_files": nature.get("bundled_files", []),
-            "extra_files": diff.get("local_extra_files", []),
             "summary": nature.get("change_label") or diff.get("summary"),
-            "diff_note": diff.get("diff_note"),
             "notes": nature.get("notes", []),
             "user_edited": nature.get("user_edited", False),
         },
@@ -345,7 +325,6 @@ def _build_summary(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "local_modified": [],
         "merge_needed": [],
         "official_with_local_changes": [],
-        "bundled_layout": [],
     }
 
     for name, info in results.items():
@@ -428,7 +407,7 @@ def check_updates(names: list[str] | None = None, max_workers: int = 8) -> dict[
     }
 
 
-def merge_skill_integrated(name: str) -> dict[str, Any]:
+def merge_skill_integrated(name: str, *, overwrite_skill_md: bool = False) -> dict[str, Any]:
     data = scan_all()
     skill = next((item for item in data["skills"] if item["folder_name"] == name or item["name"] == name), None)
     if not skill:
@@ -442,7 +421,13 @@ def merge_skill_integrated(name: str) -> dict[str, Any]:
     if remote_dir is None:
         raise ValueError(remote_meta.get("error", "无法获取远程版本"))
 
-    merge_result = merge_folders(local_dir, remote_dir)
+    md_only = remote_meta.get("source_type") == "well-known"
+    merge_result = merge_folders(
+        local_dir,
+        remote_dir,
+        md_only=md_only,
+        overwrite_skill_md=overwrite_skill_md,
+    )
 
     if lock.get("sourceType") == "github" or remote_meta.get("source_type") == "github":
         new_hash = compute_folder_hash(local_dir)
@@ -467,7 +452,7 @@ def merge_skill_integrated(name: str) -> dict[str, Any]:
     }
 
 
-def upgrade_skill(name: str, scope: str | None = None) -> dict[str, Any]:
+def upgrade_skill(name: str, scope: str | None = None, *, overwrite: bool = True) -> dict[str, Any]:
     data = scan_all()
     skill = next((item for item in data["skills"] if item["folder_name"] == name or item["name"] == name), None)
     if not skill:
@@ -493,7 +478,7 @@ def upgrade_skill(name: str, scope: str | None = None) -> dict[str, Any]:
             overwrite=True,
         )
     else:
-        return merge_skill_integrated(name)
+        return merge_skill_integrated(name, overwrite_skill_md=overwrite)
 
     if target_scope in {"agents", "project-agents"}:
         _update_lock_install(skill["folder_name"], git_url or "github", "github", git_url)
