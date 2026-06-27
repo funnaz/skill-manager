@@ -1066,6 +1066,15 @@
     $("createBtn").onclick = () => openModal("createModal");
     $("installBtn").onclick = () => openModal("installModal");
     document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
+    document.querySelectorAll(".modal").forEach((modal) => {
+      modal.addEventListener("click", (e) => {
+        if (e.target === modal) closeModal(modal.id);
+      });
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      document.querySelectorAll(".modal.open").forEach((modal) => closeModal(modal.id));
+    });
     $("createSubmit").onclick = async () => {
       try {
         const result = await api("/api/skills/create", "POST", { name: $("createName").value, description: $("createDesc").value, scope: $("createScope").value });
