@@ -92,9 +92,102 @@ def diff_folders(local_dir: Path, remote_dir: Path | None) -> dict[str, Any]:
 def _classify_change(rel: str) -> str:
     if rel == "SKILL.md":
         return "skill_md"
-    if rel.startswith("references/") or rel.startswith("scripts/"):
+    if rel.startswith("references/") or rel.startswith("scripts/") or rel.startswith("agents/"):
         return "official_asset"
     return "custom"
+
+
+def analyze_change_nature(
+    diff: dict[str, Any],
+    *,
+    md_only: bool = False,
+    locked_hash: str | None = None,
+    local_folder_hash: str | None = None,
+) -> dict[str, Any]:
+    """Distinguish real user edits from directory layout / outdated install drift."""
+    bundled_files = list(diff.get("local_extra_files", [])) if md_only else []
+    added = list(diff.get("added_locally", []))
+    modified = list(diff.get("modified", []))
+
+    custom_added = [path for path in added if _classify_change(path) == "custom"]
+    custom_modified = [item for item in modified if _classify_change(item.get("path", "")) == "custom"]
+    skill_md_modified = [item for item in modified if item.get("path") == "SKILL.md"]
+    official_asset_modified = [
+        item for item in modified
+        if _classify_change(item.get("path", "")) == "official_asset"
+    ]
+
+    user_edited = bool(custom_added or custom_modified)
+    if not user_edited and locked_hash and local_folder_hash:
+        # 只有 lock 存在且整包哈希变了，同时有非 SKILL 官方资源被改，才算用户动过
+        user_edited = bool(official_asset_modified) and local_folder_hash != locked_hash
+
+    has_remote_changes = bool(
+        diff.get("missing_locally")
+        or modified
+        or (md_only and skill_md_modified)
+    )
+    has_real_local_changes = bool(custom_added or custom_modified or (user_edited and skill_md_modified))
+
+    if user_edited and has_remote_changes:
+        change_type = "user_and_official"
+        change_label = "你改过，官方也有更新"
+    elif user_edited:
+        change_type = "user_only"
+        change_label = "仅本地功能改动"
+    elif has_remote_changes:
+        change_type = "official_outdated"
+        change_label = "安装版本落后（非用户改动）"
+    elif md_only and bundled_files and not has_real_local_changes:
+        change_type = "bundled_layout"
+        change_label = "目录结构差异（非用户改动）"
+    else:
+        change_type = "none"
+        change_label = "无实质差异"
+
+    real_local_files = custom_added + [item["path"] for item in custom_modified]
+    if user_edited:
+        real_local_files += [item["path"] for item in skill_md_modified]
+
+    return {
+        "change_type": change_type,
+        "change_label": change_label,
+        "user_edited": user_edited,
+        "bundled_files": bundled_files,
+        "bundled_only": bool(bundled_files) and not has_real_local_changes and not has_remote_changes,
+        "has_real_local_changes": has_real_local_changes,
+        "has_remote_changes": has_remote_changes,
+        "real_local_files": sorted(set(real_local_files)),
+        "skill_md_changed": bool(skill_md_modified),
+        "official_asset_changed": bool(official_asset_modified),
+        "notes": _build_change_notes(
+            md_only=md_only,
+            bundled_files=bundled_files,
+            skill_md_modified=skill_md_modified,
+            user_edited=user_edited,
+            has_remote_changes=has_remote_changes,
+        ),
+    }
+
+
+def _build_change_notes(
+    *,
+    md_only: bool,
+    bundled_files: list[str],
+    skill_md_modified: list[dict[str, Any]],
+    user_edited: bool,
+    has_remote_changes: bool,
+) -> list[str]:
+    notes: list[str] = []
+    if md_only and bundled_files:
+        notes.append(
+            f"references/ 等 {len(bundled_files)} 个文件是安装包自带目录，不是你的手改。"
+        )
+    if skill_md_modified and not user_edited and has_remote_changes:
+        notes.append("仅 SKILL.md 与官方不同，更像是安装版本落后，而不是你改了功能。")
+    if not user_edited and has_remote_changes:
+        notes.append("建议直接「覆盖升级」或「整合更新」，通常不会丢失你的定制。")
+    return notes
 
 
 def _summarize_diff(added: list[str], missing: list[str], modified: list[dict[str, Any]]) -> str:

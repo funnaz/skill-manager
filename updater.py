@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 
 from constants import GITHUB_CLONE_URL
-from diff_util import diff_folders, merge_folders
+from diff_util import analyze_change_nature, diff_folders, merge_folders
 from manager import _load_lock, _update_lock_install, install_skill
 from scanner import HOME, _read_frontmatter, scan_all
 
@@ -193,33 +193,41 @@ def fetch_remote_skill_dir(skill: dict[str, Any], lock: dict[str, Any], repo_cac
 
 def _classify_result(info: dict[str, Any]) -> dict[str, Any]:
     diff = info.get("diff") or {}
+    nature = info.get("change_nature") or {}
     official_update = bool(info.get("official_update"))
-    has_local = bool(diff.get("has_local_changes"))
-    has_remote = bool(diff.get("has_remote_changes"))
-    needs_merge = has_local and has_remote and info.get("status") not in {"up_to_date", "local_ahead"}
+    user_edited = bool(nature.get("user_edited"))
+    has_remote = bool(nature.get("has_remote_changes"))
+    has_real_local = bool(nature.get("has_real_local_changes"))
+    needs_merge = user_edited and has_remote and info.get("status") not in {"up_to_date", "local_ahead"}
+    change_type = nature.get("change_type", "none")
 
     group = "up_to_date"
     if info.get("status") in {"error", "unknown", "not_checkable"}:
         group = info.get("status", "unknown")
+    elif change_type == "bundled_layout":
+        group = "bundled_layout"
     elif official_update and needs_merge:
         group = "official_with_local_changes"
     elif official_update:
         group = "official_update"
     elif needs_merge:
         group = "merge_needed"
-    elif has_local and not has_remote:
+    elif change_type == "user_only":
         group = "local_modified"
-    elif has_remote and not has_local:
+    elif change_type == "official_outdated" or has_remote:
         group = "remote_update"
     elif info.get("status") in {"update_available", "content_diff"}:
         group = "remote_update"
 
     return {
         "official_update": official_update,
-        "has_local_changes": has_local,
+        "has_local_changes": has_real_local,
         "has_remote_changes": has_remote,
+        "user_edited": user_edited,
         "needs_merge": needs_merge,
         "group": group,
+        "change_type": change_type,
+        "change_label": nature.get("change_label"),
     }
 
 
@@ -269,10 +277,18 @@ def _build_check_result(
         if extra_files:
             parts.append(f"本地附属文件 {len(extra_files)} 个")
         diff["summary"] = "；".join(parts) if parts else "无文件差异"
-        diff["diff_note"] = "well-known 源仅拉取 SKILL.md 比对；references/ 等目录列为本地附属文件"
-        diff["has_local_changes"] = bool(
-            diff.get("added_locally") or diff.get("modified") or extra_files
-        )
+        diff["diff_note"] = "well-known 源仅拉取 SKILL.md 比对；references/ 等是安装包目录，不算用户改动"
+        diff["has_local_changes"] = bool(diff.get("added_locally") or diff.get("modified"))
+
+    nature = analyze_change_nature(
+        diff,
+        md_only=md_only,
+        locked_hash=locked_hash or None,
+        local_folder_hash=local_info["folder_hash"],
+    )
+    diff["has_local_changes"] = nature["has_real_local_changes"]
+    diff["has_remote_changes"] = nature["has_remote_changes"]
+
     official_update = version_status == "update_available" and bool(remote_info["version"])
 
     result = {
@@ -286,12 +302,17 @@ def _build_check_result(
         "locked_hash": locked_hash or None,
         "official_update": official_update,
         "diff": diff,
+        "change_nature": nature,
         "local_changes": {
             "added_files": diff.get("added_locally", []),
             "modified_files": [item["path"] for item in diff.get("modified", [])],
+            "real_files": nature.get("real_local_files", []),
+            "bundled_files": nature.get("bundled_files", []),
             "extra_files": diff.get("local_extra_files", []),
-            "summary": diff.get("summary"),
+            "summary": nature.get("change_label") or diff.get("summary"),
             "diff_note": diff.get("diff_note"),
+            "notes": nature.get("notes", []),
+            "user_edited": nature.get("user_edited", False),
         },
     }
     result.update(_classify_result(result))
@@ -324,6 +345,7 @@ def _build_summary(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "local_modified": [],
         "merge_needed": [],
         "official_with_local_changes": [],
+        "bundled_layout": [],
     }
 
     for name, info in results.items():
@@ -335,6 +357,9 @@ def _build_summary(results: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "local_version": info.get("local_version"),
             "remote_version": info.get("remote_version"),
             "local_changes": info.get("local_changes"),
+            "change_label": info.get("change_label"),
+            "change_type": info.get("change_type"),
+            "user_edited": info.get("user_edited"),
             "diff": info.get("diff"),
             "status": info.get("status"),
             "needs_merge": info.get("needs_merge"),
@@ -498,6 +523,9 @@ def merge_updates_into_scan(scan_data: dict[str, Any], update_data: dict[str, An
             "merge_needed",
         } or info.get("status") in {"update_available", "content_diff"}
         item["has_local_changes"] = info.get("has_local_changes", False)
+        item["user_edited"] = info.get("user_edited", False)
+        item["change_type"] = info.get("change_type")
+        item["change_label"] = info.get("change_label")
         skills.append(item)
     merged["skills"] = skills
     merged["updates"] = {

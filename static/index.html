@@ -264,8 +264,9 @@
         <div class="detail-actions">
           ${skill.deletable ? `<button class="danger" id="deleteSelectedBtn">删除此 Skill</button>` : `<button disabled title="${escapeHtml(skill.delete_reason)}">不可删除</button>`}
           ${skill.disabled ? `<button id="enableSelectedBtn">启用</button>` : `<button id="disableSelectedBtn">禁用</button>`}
-          ${skill.needs_merge || skill.has_local_changes ? `<button class="primary" id="mergeSelectedBtn">整合更新</button>` : ""}
-          ${skill.has_update && !skill.needs_merge ? `<button id="upgradeSelectedBtn">覆盖升级</button>` : ""}
+          ${skill.needs_merge ? `<button class="primary" id="mergeSelectedBtn">整合更新</button>` : ""}
+          ${skill.has_update && !skill.user_edited ? `<button class="primary" id="upgradeSelectedBtn">直接升级</button>` : ""}
+          ${skill.has_update && skill.user_edited && !skill.needs_merge ? `<button id="upgradeSelectedBtn">覆盖升级</button>` : ""}
         </div>
         <div class="detail-section"><h4>安装到哪些 Agent</h4><div class="tag-row">${skill.agent_labels.length ? skill.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("") : `<span class="tag">仅磁盘存在</span>`}</div></div>
         <div class="detail-section"><h4>元信息</h4><div class="kv">
@@ -311,10 +312,12 @@
     }
 
     function renderUpdateItem(item, actions = true) {
-      const added = item.local_changes?.added_files || item.diff?.added_locally || [];
-      const extra = item.local_changes?.extra_files || item.diff?.local_extra_files || [];
+      const real = item.local_changes?.real_files || [];
+      const bundled = item.local_changes?.bundled_files || item.local_changes?.extra_files || item.diff?.local_extra_files || [];
       const modified = item.local_changes?.modified_files || (item.diff?.modified || []).map(i => i.path);
       const missing = item.diff?.missing_locally || [];
+      const notes = item.local_changes?.notes || [];
+      const label = item.change_label || item.local_changes?.summary || "";
       const note = item.local_changes?.diff_note || item.diff?.diff_note || "";
       const versionText = item.local_version || item.remote_version
         ? `${escapeHtml(item.local_version || "-")} → ${escapeHtml(item.remote_version || "-")}`
@@ -324,17 +327,20 @@
           <strong>${escapeHtml(item.name)}</strong>
           <span class="tag">${versionText}</span>
         </div>
+        <div class="sub" style="margin:6px 0 8px;">${escapeHtml(label)}</div>
         <ul class="change-list">
-          ${added.map(f => `<li>本地新增：${escapeHtml(f)}</li>`).join("")}
-          ${modified.map(f => `<li>双方修改：${escapeHtml(f)}</li>`).join("")}
+          ${real.map(f => `<li>你的功能改动：${escapeHtml(f)}</li>`).join("")}
+          ${!real.length && modified.length && !item.user_edited ? modified.map(f => `<li>官方更新文件：${escapeHtml(f)}</li>`).join("") : ""}
           ${missing.map(f => `<li>官方新增：${escapeHtml(f)}</li>`).join("")}
-          ${extra.map(f => `<li>本地附属：${escapeHtml(f)}</li>`).join("")}
-          ${!(added.length || modified.length || missing.length || extra.length) ? `<li>${escapeHtml(item.local_changes?.summary || item.diff?.summary || "存在版本或内容差异")}</li>` : ""}
+          ${bundled.length ? `<li>安装包目录（非手改）：${bundled.length} 个文件</li>` : ""}
+          ${!(real.length || modified.length || missing.length || bundled.length) ? `<li>${escapeHtml(label || "存在版本或内容差异")}</li>` : ""}
         </ul>
+        ${notes.map(n => `<div class="sub">• ${escapeHtml(n)}</div>`).join("")}
         ${note ? `<div class="sub">${escapeHtml(note)}</div>` : ""}
         ${actions ? `<div class="mini-actions" style="margin-top:10px;">
           ${item.needs_merge ? `<button class="primary" data-merge="${escapeHtml(item.name)}">整合更新</button>` : ""}
-          <button data-upgrade="${escapeHtml(item.name)}">覆盖升级</button>
+          ${item.user_edited ? "" : `<button class="primary" data-upgrade="${escapeHtml(item.name)}">直接升级</button>`}
+          ${item.user_edited ? `<button data-upgrade="${escapeHtml(item.name)}">覆盖升级</button>` : ""}
         </div>` : ""}
       </div>`;
     }
@@ -343,10 +349,11 @@
       if (!summary) return `<div class="empty">没有可展示的更新结果</div>`;
       const sections = [
         ["official_updates", "官方版本更新", "版本号有变化，说明官方发布了新版本"],
-        ["official_with_local_changes", "官方更新且本地有改动", "官方有新版本，同时你本地也改过，建议用「整合更新」"],
-        ["merge_needed", "需要整合", "官方和本地都改了相同文件，建议整合保留本地定制"],
-        ["remote_updates", "远程内容更新", "官方内容有变，但你本地没有额外改动，可直接升级"],
-        ["local_modified", "仅本地有改动", "远程未变或无法确认，主要是你本地新增/修改了文件"],
+        ["official_with_local_changes", "官方更新且你有功能改动", "官方有新版本，同时你确实改过功能，建议用「整合更新」"],
+        ["merge_needed", "需要整合", "你改过功能，官方也更新了，建议整合保留本地定制"],
+        ["remote_updates", "安装版本落后", "官方内容有变，但你没有实际功能改动，可直接升级"],
+        ["local_modified", "仅你有功能改动", "主要是你本地新增/修改了功能文件"],
+        ["bundled_layout", "目录结构差异（可忽略）", "references/ 等是安装包自带目录，不是你的手改"],
       ];
       const html = sections.map(([key, title, desc]) => {
         const items = summary[key] || [];
