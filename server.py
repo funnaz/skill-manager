@@ -29,7 +29,7 @@ PORT = 5520
 class CreateSkillRequest(BaseModel):
     name: str | None = None
     description: str | None = None
-    scope: str = "grok"
+    scope: str = "agents"
     body: str | None = None
     skill_md: str | None = None
 
@@ -40,7 +40,7 @@ class ParseSkillMdRequest(BaseModel):
 
 class InstallSkillRequest(BaseModel):
     name: str | None = None
-    scope: str = "grok"
+    scope: str = "agents"
     source_path: str | None = None
     git_url: str | None = None
     skill_subpath: str | None = None

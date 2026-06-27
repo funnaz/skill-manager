@@ -683,12 +683,7 @@
         <label>名称（可修改，自动填入解析标题）<input id="createName" placeholder="解析后自动填入标题" /></label>
         <label>功能描述（可修改，自动填入解析结果）<input id="createDesc" placeholder="解析后自动填入功能描述" /></label>
         <label>安装位置
-          <select id="createScope">
-            <option value="grok">Grok 用户 (~/.grok/skills)</option>
-            <option value="agents">共享 Agents (~/.agents/skills)</option>
-            <option value="codex">Codex (~/.codex/skills)</option>
-            <option value="cursor">Cursor (~/.cursor/skills)</option>
-          </select>
+          <select id="createScope"></select>
         </label>
       </div>
       <div class="modal-actions">
@@ -705,12 +700,7 @@
       <div class="form-grid">
         <label>名称（可选）<input id="installName" placeholder="留空则读取 SKILL.md" /></label>
         <label>安装位置
-          <select id="installScope">
-            <option value="grok">Grok 用户 (~/.grok/skills)</option>
-            <option value="agents">共享 Agents (~/.agents/skills)</option>
-            <option value="codex">Codex (~/.codex/skills)</option>
-            <option value="cursor">Cursor (~/.cursor/skills)</option>
-          </select>
+          <select id="installScope"></select>
         </label>
         <label>本地目录<input id="installPath" placeholder="C:\path\to\skill-folder" /></label>
         <label>GitHub 仓库<input id="installGit" placeholder="https://github.com/funnaz/skill-manager.git" /></label>
@@ -762,6 +752,29 @@
     const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
     const openModal = (id) => $(id).classList.add("open");
     const closeModal = (id) => $(id).classList.remove("open");
+
+    const SCOPE_OPTIONS = [
+      ["agents", "共享 Agents", ".agents/skills"],
+      ["codex", "Codex", ".codex/skills"],
+      ["cursor", "Cursor", ".cursor/skills"],
+      ["grok", "Grok 用户", ".grok/skills"],
+    ];
+
+    function formatScopePath(home, rel) {
+      const sep = home.includes("\\") ? "\\" : "/";
+      return `${home}${sep}${rel.split("/").filter(Boolean).join(sep)}`;
+    }
+
+    function renderScopeSelects() {
+      const home = state.data?.home || "~";
+      const html = SCOPE_OPTIONS.map(([value, label, rel], index) => {
+        const path = home === "~" ? `~/${rel}` : formatScopePath(home, rel);
+        const selected = index === 0 ? " selected" : "";
+        return `<option value="${value}"${selected}>${label}（${path}）</option>`;
+      }).join("");
+      $("createScope").innerHTML = html;
+      $("installScope").innerHTML = html;
+    }
 
     const STAT_META = [
       ["Skill 总数", "totals.skills", "📦", "#5b8cff"],
@@ -1041,7 +1054,7 @@
       const query = state.withUpdates ? "?check_updates_flag=true" : "";
       state.data = await api(`/api/scan${query}`);
       if (!state.data.skills.some(s => s.id === state.selectedId)) state.selectedId = state.data.skills[0]?.id || null;
-      renderStats(); renderAgents(); renderCategoryFilters(); renderSkillList();
+      renderStats(); renderAgents(); renderCategoryFilters(); renderSkillList(); renderScopeSelects();
       const selected = state.data.skills.find(s => s.id === state.selectedId);
       await renderDetail(selected);
       document.body.classList.remove("loading");

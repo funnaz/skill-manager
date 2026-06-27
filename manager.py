@@ -189,7 +189,7 @@ def _resolve_skill_name_from_input(raw: str | None, fallback: str) -> str:
 def create_skill(
     name: str | None = None,
     description: str | None = None,
-    scope: str = "grok",
+    scope: str = "agents",
     body: str | None = None,
     skill_md: str | None = None,
 ) -> dict[str, Any]:
@@ -252,7 +252,7 @@ def _render_skill_md(meta: dict[str, Any], body: str) -> str:
 
 def install_skill(
     name: str | None,
-    scope: str = "grok",
+    scope: str = "agents",
     source_path: str | None = None,
     git_url: str | None = None,
     skill_subpath: str | None = None,
