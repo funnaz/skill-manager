@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skill 管家</title>
+  <style>
+    :root {
+      --bg: #0b1020; --panel: #121a2f; --panel-2: #18233d; --border: #24304f;
+      --text: #e8edf8; --muted: #93a0bf; --accent: #5b8cff; --accent-2: #7c5cff;
+      --ok: #34d399; --danger: #fb7185; --shadow: 0 18px 50px rgba(0,0,0,.35); --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(circle at top left, rgba(91,140,255,.18), transparent 28%),
+                  radial-gradient(circle at top right, rgba(124,92,255,.16), transparent 24%), var(--bg);
+      color: var(--text); min-height: 100vh;
+    }
+    .app { max-width: 1440px; margin: 0 auto; padding: 28px 24px 40px; }
+    .hero { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+    .hero h1 { margin: 0 0 8px; font-size: 32px; }
+    .hero p { margin: 0; color: var(--muted); max-width: 720px; line-height: 1.6; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+    button, .chip, select, textarea, input[type=text] {
+      border: 1px solid var(--border); background: var(--panel); color: var(--text);
+      border-radius: 12px; padding: 10px 14px; font-size: 14px;
+    }
+    button { cursor: pointer; border-radius: 999px; padding: 10px 16px; }
+    button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: none; font-weight: 600; }
+    button.danger { background: rgba(251,113,133,.15); border-color: rgba(251,113,133,.45); color: #fecdd3; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; margin-bottom: 18px; }
+    .stat, .agent-card, .skill-card, .detail, .filters, .list-panel, .modal-card {
+      background: rgba(18,26,47,.92); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .stat { padding: 18px 20px; }
+    .stat .label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .stat .value { font-size: 30px; font-weight: 700; }
+    .layout { display: grid; grid-template-columns: 320px 1fr 420px; gap: 16px; min-height: 72vh; }
+    .panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 12px; }
+    .filters, .list-panel, .detail { padding: 18px; min-height: 0; }
+    .agent-grid { display: grid; gap: 10px; margin-bottom: 18px; }
+    .agent-card { padding: 14px; }
+    .agent-top { display: flex; justify-content: space-between; align-items: center; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: var(--panel-2); }
+    .badge::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .agent-meta, .skill-desc, .detail .sub { color: var(--muted); font-size: 12px; line-height: 1.55; word-break: break-all; }
+    .search { width: 100%; margin-bottom: 12px; }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .chip.active { background: rgba(91,140,255,.18); border-color: rgba(91,140,255,.55); color: #dbe7ff; }
+    .skill-list { overflow: auto; max-height: calc(72vh - 40px); display: grid; gap: 10px; }
+    .skill-card { padding: 14px 16px; cursor: pointer; transition: .15s ease; }
+    .skill-card:hover, .skill-card.active { transform: translateY(-1px); border-color: rgba(91,140,255,.7); }
+    .skill-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .skill-title h3 { margin: 0; font-size: 16px; }
+    .skill-desc { font-size: 13px; margin-bottom: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 11px; padding: 4px 8px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+    .detail { overflow: auto; max-height: 72vh; }
+    .detail h2 { margin: 0 0 8px; font-size: 24px; }
+    .detail .sub { font-size: 13px; margin-bottom: 16px; }
+    .detail-actions { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .detail-section { margin-bottom: 18px; }
+    .detail-section h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+    .kv { display: grid; gap: 8px; }
+    .kv div { display: grid; grid-template-columns: 110px 1fr; gap: 10px; font-size: 13px; }
+    .kv span:first-child { color: var(--muted); }
+    .markdown { white-space: pre-wrap; font-family: Consolas, monospace; font-size: 12px; line-height: 1.6; background: #0d1428; border: 1px solid var(--border); border-radius: 12px; padding: 14px; overflow: auto; max-height: 360px; }
+    .empty { color: var(--muted); padding: 28px 12px; text-align: center; }
+    .loading { opacity: .7; pointer-events: none; }
+    .modal { position: fixed; inset: 0; background: rgba(3,7,18,.72); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 20; }
+    .modal.open { display: flex; }
+    .modal-card { width: min(560px, 100%); padding: 22px; }
+    .modal-card h3 { margin: 0 0 8px; }
+    .modal-card p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .form-grid { display: grid; gap: 12px; margin: 16px 0; }
+    .form-grid label { display: grid; gap: 6px; font-size: 13px; color: var(--muted); }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    .toast { position: fixed; right: 20px; bottom: 20px; background: #111a31; border: 1px solid var(--border); padding: 12px 16px; border-radius: 12px; display: none; z-index: 30; }
+    .toast.show { display: block; }
+    @media (max-width: 1180px) { .layout, .stats { grid-template-columns: 1fr; } .skill-list, .detail { max-height: none; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="hero">
+      <div>
+        <h1>Skill 管家</h1>
+        <p>扫描、安装、创建和删除本机 Agent Skills。支持 Grok Build、Cursor、OpenAI Codex，以及共享的 <code>.agents/skills</code> 目录。</p>
+      </div>
+      <div class="actions">
+        <button id="createBtn">新建 Skill</button>
+        <button id="installBtn">安装 Skill</button>
+        <button id="refreshBtn" class="primary">重新扫描</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="layout">
+      <section class="filters">
+        <p class="panel-title">Agent 概览</p>
+        <div class="agent-grid" id="agentGrid"></div>
+        <p class="panel-title">筛选</p>
+        <input class="search" id="searchInput" placeholder="搜索名称、描述、路径..." />
+        <div class="chip-row" id="agentFilters"></div>
+        <div class="chip-row" id="categoryFilters"></div>
+      </section>
+      <section class="list-panel">
+        <p class="panel-title">Skill 列表 <span id="listCount"></span></p>
+        <div class="skill-list" id="skillList"></div>
+      </section>
+      <section class="detail" id="detailPanel"><div class="empty">选择一个 Skill 查看详情</div></section>
+    </div>
+  </div>
+
+  <div class="modal" id="createModal">
+    <div class="modal-card">
+      <h3>新建 Skill</h3>
+      <p>在指定 scope 下创建标准 SKILL.md 模板。</p>
+      <div class="form-grid">
+        <label>名称<input id="createName" placeholder="my-skill" /></label>
+        <label>描述<input id="createDesc" placeholder="这个 skill 做什么、何时触发" /></label>
+        <label>安装位置
+          <select id="createScope">
+            <option value="grok">Grok 用户 (~/.grok/skills)</option>
+            <option value="agents">共享 Agents (~/.agents/skills)</option>
+            <option value="codex">Codex (~/.codex/skills)</option>
+            <option value="cursor">Cursor (~/.cursor/skills)</option>
+          </select>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button data-close="createModal">取消</button>
+        <button class="primary" id="createSubmit">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="installModal">
+    <div class="modal-card">
+      <h3>安装 Skill</h3>
+      <p>从本地目录或 GitHub 仓库安装。仓库中需包含 SKILL.md。</p>
+      <div class="form-grid">
+        <label>名称（可选）<input id="installName" placeholder="留空则读取 SKILL.md" /></label>
+        <label>安装位置
+          <select id="installScope">
+            <option value="grok">Grok 用户 (~/.grok/skills)</option>
+            <option value="agents">共享 Agents (~/.agents/skills)</option>
+            <option value="codex">Codex (~/.codex/skills)</option>
+            <option value="cursor">Cursor (~/.cursor/skills)</option>
+          </select>
+        </label>
+        <label>本地目录<input id="installPath" placeholder="C:\path\to\skill-folder" /></label>
+        <label>GitHub 仓库<input id="installGit" placeholder="https://github.com/user/repo.git" /></label>
+        <label>仓库内子路径（可选）<input id="installSubpath" placeholder="skills/my-skill" /></label>
+      </div>
+      <div class="modal-actions">
+        <button data-close="installModal">取消</button>
+        <button class="primary" id="installSubmit">安装</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const state = { data: null, selectedId: null, search: "", agent: "all", category: "all" };
+    const $ = (id) => document.getElementById(id);
+    const toast = (msg) => { const el = $("toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 3200); };
+    const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+    const openModal = (id) => $(id).classList.add("open");
+    const closeModal = (id) => $(id).classList.remove("open");
+
+    async function api(path, method = "GET", body) {
+      const res = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "请求失败");
+      return data;
+    }
+
+    function renderStats() {
+      const { totals, scanned_at } = state.data;
+      $("stats").innerHTML = [["Skill 总数", totals.skills],["已配置 Agent", totals.agents_configured],["多 Agent 共享", totals.shared_skills],["可删除", state.data.skills.filter(s => s.deletable).length]]
+        .map(([l,v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
+      document.title = `Skill 管家 · ${totals.skills}`;
+    }
+
+    function renderAgents() {
+      $("agentGrid").innerHTML = state.data.agents.map(a => `
+        <div class="agent-card"><div class="agent-top"><div>${escapeHtml(a.label)}</div><span class="badge" style="color:${a.color}">${a.installed} 个</span></div>
+        <div class="agent-meta">${a.configured ? a.roots.map(r => `<div>${escapeHtml(r)}</div>`).join("") : "未检测到配置目录"}</div></div>`).join("");
+      $("agentFilters").innerHTML = [`<button class="chip ${state.agent==="all"?"active":""}" data-agent="all">全部 Agent</button>`,
+        ...state.data.agents.map(a => `<button class="chip ${state.agent===a.id?"active":""}" data-agent="${a.id}">${escapeHtml(a.short)} (${a.installed})</button>`)].join("");
+    }
+
+    function renderCategoryFilters() {
+      $("categoryFilters").innerHTML = [`<button class="chip ${state.category==="all"?"active":""}" data-category="all">全部分类</button>`,
+        ...state.data.categories.map(c => `<button class="chip ${state.category===c.id?"active":""}" data-category="${c.id}">${escapeHtml(c.label)} (${c.count})</button>`)].join("");
+    }
+
+    function filteredSkills() {
+      const q = state.search.trim().toLowerCase();
+      return state.data.skills.filter(s => {
+        if (state.agent !== "all" && !s.agents.includes(state.agent)) return false;
+        if (state.category !== "all" && s.category !== state.category) return false;
+        if (!q) return true;
+        return [s.name,s.folder_name,s.description,s.path,s.resolved_path,s.agent_labels.join(" "),s.category].join(" ").toLowerCase().includes(q);
+      });
+    }
+
+    function renderSkillList() {
+      const skills = filteredSkills();
+      $("listCount").textContent = `(${skills.length})`;
+      $("skillList").innerHTML = skills.length ? skills.map(s => `
+        <article class="skill-card ${state.selectedId===s.id?"active":""}" data-id="${escapeHtml(s.id)}">
+          <div class="skill-title"><h3>${escapeHtml(s.name)}</h3><span class="tag">${escapeHtml(s.category)}</span></div>
+          <div class="skill-desc">${escapeHtml(s.description || "无描述")}</div>
+          <div class="tag-row">${s.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("")}${s.deletable ? "" : '<span class="tag">受保护</span>'}</div>
+        </article>`).join("") : `<div class="empty">没有匹配的 Skill</div>`;
+    }
+
+    async function renderDetail(skill) {
+      if (!skill) { $("detailPanel").innerHTML = `<div class="empty">选择一个 Skill 查看详情</div>`; return; }
+      $("detailPanel").innerHTML = `<div class="empty">加载内容中...</div>`;
+      const content = await api(`/api/skill?path=${encodeURIComponent(skill.resolved_path)}`);
+      $("detailPanel").innerHTML = `
+        <h2>${escapeHtml(skill.name)}</h2>
+        <div class="sub">${escapeHtml(skill.description || "无描述")}</div>
+        <div class="detail-actions">
+          ${skill.deletable ? `<button class="danger" id="deleteSelectedBtn">删除此 Skill</button>` : `<button disabled title="${escapeHtml(skill.delete_reason)}">不可删除</button>`}
+        </div>
+        <div class="detail-section"><h4>安装到哪些 Agent</h4><div class="tag-row">${skill.agent_labels.length ? skill.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("") : `<span class="tag">仅磁盘存在</span>`}</div></div>
+        <div class="detail-section"><h4>元信息</h4><div class="kv">
+          <div><span>文件夹</span><span>${escapeHtml(skill.folder_name)}</span></div>
+          <div><span>分类</span><span>${escapeHtml(skill.category)}</span></div>
+          <div><span>路径</span><span>${escapeHtml(skill.resolved_path)}</span></div>
+          ${skill.source ? `<div><span>来源</span><span>${escapeHtml(skill.source)}</span></div>` : ""}
+          <div><span>可删除</span><span>${skill.deletable ? "是" : escapeHtml(skill.delete_reason)}</span></div>
+        </div></div>
+        <div class="detail-section"><h4>SKILL.md</h4><pre class="markdown">${escapeHtml(content.raw || "")}</pre></div>`;
+      const delBtn = $("deleteSelectedBtn");
+      if (delBtn) delBtn.onclick = () => deleteSkill(skill);
+    }
+
+    async function deleteSkill(skill) {
+      if (!confirm(`确认删除 ${skill.name}？\n${skill.resolved_path}`)) return;
+      await api("/api/skills/delete", "POST", { resolved_path: skill.resolved_path });
+      toast(`已删除 ${skill.name}`);
+      state.selectedId = null;
+      await loadData();
+    }
+
+    async function loadData() {
+      document.body.classList.add("loading");
+      state.data = await api("/api/scan");
+      if (!state.data.skills.some(s => s.id === state.selectedId)) state.selectedId = state.data.skills[0]?.id || null;
+      renderStats(); renderAgents(); renderCategoryFilters(); renderSkillList();
+      const selected = state.data.skills.find(s => s.id === state.selectedId);
+      await renderDetail(selected);
+      document.body.classList.remove("loading");
+    }
+
+    $("searchInput").oninput = (e) => { state.search = e.target.value; renderSkillList(); };
+    $("agentFilters").onclick = (e) => { const b = e.target.closest("[data-agent]"); if (!b) return; state.agent = b.dataset.agent; renderAgents(); renderSkillList(); };
+    $("categoryFilters").onclick = (e) => { const b = e.target.closest("[data-category]"); if (!b) return; state.category = b.dataset.category; renderCategoryFilters(); renderSkillList(); };
+    $("skillList").onclick = (e) => { const c = e.target.closest("[data-id]"); if (!c) return; state.selectedId = c.dataset.id; renderSkillList(); renderDetail(state.data.skills.find(s => s.id === state.selectedId)); };
+    $("refreshBtn").onclick = loadData;
+    $("createBtn").onclick = () => openModal("createModal");
+    $("installBtn").onclick = () => openModal("installModal");
+    document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
+    $("createSubmit").onclick = async () => {
+      try {
+        const result = await api("/api/skills/create", "POST", { name: $("createName").value, description: $("createDesc").value, scope: $("createScope").value });
+        toast(`已创建 ${result.name}`); closeModal("createModal"); await loadData();
+      } catch (err) { toast(err.message); }
+    };
+    $("installSubmit").onclick = async () => {
+      try {
+        const result = await api("/api/skills/install", "POST", {
+          name: $("installName").value || null,
+          scope: $("installScope").value,
+          source_path: $("installPath").value || null,
+          git_url: $("installGit").value || null,
+          skill_subpath: $("installSubpath").value || null,
+        });
+        toast(`已安装 ${result.name}`); closeModal("installModal"); await loadData();
+      } catch (err) { toast(err.message); }
+    };
+    loadData();
+  </script>
+</body>
+</html>
