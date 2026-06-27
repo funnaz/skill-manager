@@ -1,10 +1,11 @@
 ---
 name: skill-manager
 description: |
-  管理本机 Agent Skills：扫描、可视化、创建、安装、删除。
-  触发方式：/skill-manager、/skill管家、「帮我管理 skill」「安装新 skill」「删除无用 skill」「打开 skill 面板」
-  Manage local agent skills: scan, visualize, create, install, delete.
-  Trigger: /skill-manager, "manage my skills", "install a skill", "delete unused skill", "open skill dashboard".
+  管理本机 Agent Skills：扫描、可视化、创建、安装、禁用、删除、导出报告。
+  触发方式：/skill-manager、/skill管家、「帮我管理 skill」「安装新 skill」「删除无用 skill」「禁用 skill」「导出 skill 报告」「打开 skill 面板」
+  Manage local agent skills: scan, visualize, create, install, disable, delete, export.
+  Trigger: /skill-manager, "manage my skills", "install a skill", "delete unused skill", "disable skill", "export skill report", "open skill dashboard".
+  GitHub: https://github.com/funnaz/skill-manager
 metadata:
   short-description: "Scan, install, and delete local agent skills"
 ---
@@ -36,6 +37,8 @@ metadata:
 ```
 
 如果用户通过 `~/.grok/skills/skill-manager/` 安装，则 `<skill-manager-root>` 即该目录。
+
+GitHub 仓库：https://github.com/funnaz/skill-manager
 
 ## 工作流
 
@@ -99,7 +102,16 @@ python <skill-manager-root>/cli.py install --git "https://github.com/user/repo.g
 
 安装前检查目标 scope 是否已存在同名 skill；若存在，先问用户是否改名称或删除旧版本。
 
-### 5. 删除无用 Skill
+### 5. 禁用 / 启用 Skill（Grok）
+
+写入 `~/.grok/config.toml` 的 `[skills] disabled` 列表：
+
+```bash
+python <skill-manager-root>/cli.py disable --name <skill-name>
+python <skill-manager-root>/cli.py enable --name <skill-name>
+```
+
+### 6. 删除无用 Skill
 
 只允许删除用户自定义或手动安装的 skills。以下类型**禁止删除**：
 - Grok 内置（`grok-bundled`）
@@ -120,6 +132,19 @@ python <skill-manager-root>/cli.py delete --name <skill-name>
 ```
 
 如果 skill 在 `~/.agents/skills/`，删除时同步清理相关 junction 桥接，并更新 `~/.agents/.skill-lock.json`。
+
+批量删除：
+
+```bash
+python <skill-manager-root>/cli.py delete --batch "old-skill,another-skill"
+```
+
+### 7. 导出报告
+
+```bash
+python <skill-manager-root>/cli.py export --format markdown --output skill-report.md
+python <skill-manager-root>/cli.py export --format json
+```
 
 ## 交互要求
 

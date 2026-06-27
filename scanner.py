@@ -130,28 +130,9 @@ def _load_skill_lock() -> dict[str, Any]:
 
 
 def _load_disabled_skills() -> set[str]:
-    config_path = HOME / ".grok" / "config.toml"
-    if not config_path.exists():
-        return set()
-    disabled: set[str] = set()
-    in_skills = False
-    for raw in config_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if line == "[skills]":
-            in_skills = True
-            continue
-        if line.startswith("[") and line.endswith("]"):
-            in_skills = False
-            continue
-        if in_skills and line.startswith("disabled"):
-            match = re.search(r"\[(.*)\]", line)
-            if match:
-                items = re.findall(r'"([^"]+)"|\'([^\']+)\'|([^,\]\s]+)', match.group(1))
-                for groups in items:
-                    value = next((g for g in groups if g), None)
-                    if value:
-                        disabled.add(value.strip())
-    return disabled
+    from config_io import load_disabled_skills
+
+    return set(load_disabled_skills())
 
 
 def _junction_info(path: Path) -> tuple[bool, str | None]:
@@ -350,9 +331,16 @@ def scan_all() -> dict[str, Any]:
 
     shared = sorted(s.name for s in skills if len(s.agents) > 1)
 
+    from constants import GITHUB_CLONE_URL, GITHUB_URL
+
     return {
         "scanned_at": datetime.now().isoformat(timespec="seconds"),
         "home": str(HOME),
+        "project": {
+            "name": "skill-manager",
+            "github_url": GITHUB_URL,
+            "clone_url": GITHUB_CLONE_URL,
+        },
         "totals": {
             "skills": len(skills),
             "agents_configured": sum(1 for a in agent_summary if a["configured"]),

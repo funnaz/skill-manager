@@ -335,3 +335,56 @@ def delete_skill(
         "path": str(target),
         "removed_bridges": removed_bridges,
     }
+
+
+def batch_delete(
+    names: list[str] | None = None,
+    resolved_paths: list[str] | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    targets: list[dict[str, Any]] = []
+    if names:
+        for name in names:
+            skill = find_skill_by_name(name)
+            if not skill:
+                raise FileNotFoundError(f"未找到 Skill: {name}")
+            targets.append(skill)
+    if resolved_paths:
+        data = scan_all()
+        for path in resolved_paths:
+            folder = Path(path).resolve()
+            skill = next(
+                (item for item in data["skills"] if Path(item["resolved_path"]).resolve() == folder),
+                None,
+            )
+            if not skill:
+                raise FileNotFoundError(f"未在扫描结果中找到: {path}")
+            targets.append(skill)
+
+    if not targets:
+        raise ValueError("必须提供 names 或 resolved_paths")
+
+    seen: set[str] = set()
+    deleted: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+
+    for skill in targets:
+        key = skill["resolved_path"].lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            deleted.append(
+                delete_skill(resolved_path=skill["resolved_path"], force=force)
+            )
+        except Exception as exc:  # noqa: BLE001
+            failed.append({"name": skill["name"], "error": str(exc)})
+
+    return {
+        "ok": not failed,
+        "action": "batch_delete",
+        "deleted_count": len(deleted),
+        "failed_count": len(failed),
+        "deleted": deleted,
+        "failed": failed,
+    }

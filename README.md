@@ -1,6 +1,8 @@
 # Skill Manager
 
-一个可安装的 Agent Skill，用来管理本机 Skills：扫描、可视化、创建、安装、删除。
+一个可安装的 Agent Skill，用来管理本机 Skills：扫描、可视化、创建、安装、禁用、删除、导出报告。
+
+GitHub: **https://github.com/funnaz/skill-manager**
 
 支持：
 - **Grok Build**（`~/.grok/skills/`、内置 skills、marketplace）
@@ -8,32 +10,30 @@
 - **Cursor**（`~/.cursor/skills/`）
 - **OpenAI Codex**（`~/.codex/skills/`）
 
-## 安装为 Skill
+## 快速安装
 
-### 方式一：安装到 Grok 用户目录
-
-```bash
-git clone https://github.com/<your-user>/skill-manager.git
-cp -r skill-manager ~/.grok/skills/skill-manager
-```
-
-Windows PowerShell:
+### Windows
 
 ```powershell
-git clone https://github.com/<your-user>/skill-manager.git
-Copy-Item -Recurse skill-manager $env:USERPROFILE\.grok\skills\skill-manager
-```
-
-### 方式二：通过本工具自安装
-
-```bash
-python cli.py install --git "https://github.com/<your-user>/skill-manager.git" --scope grok
-```
-
-## 依赖
-
-```bash
+git clone https://github.com/funnaz/skill-manager.git
+cd skill-manager
 pip install -r requirements.txt
+python cli.py install --git "https://github.com/funnaz/skill-manager.git" --scope grok
+```
+
+或使用脚本：
+
+```powershell
+.\scripts\install.ps1 -Scope grok
+```
+
+### macOS / Linux
+
+```bash
+git clone https://github.com/funnaz/skill-manager.git
+cd skill-manager
+pip install -r requirements.txt
+python cli.py install --git "https://github.com/funnaz/skill-manager.git" --scope grok
 ```
 
 ## 使用
@@ -69,16 +69,29 @@ python cli.py install --from-path "C:/path/to/skill" --scope grok
 GitHub：
 
 ```bash
-python cli.py install --git "https://github.com/user/repo.git" --subpath "skills/my-skill" --scope agents
+python cli.py install --git "https://github.com/funnaz/wechat-public-account-coach.git" --scope agents
+```
+
+### 禁用 / 启用（Grok）
+
+```bash
+python cli.py disable --name my-skill
+python cli.py enable --name my-skill
 ```
 
 ### 删除 Skill
 
 ```bash
 python cli.py delete --name my-skill
+python cli.py delete --batch "old-skill,another-skill"
 ```
 
-受保护类型（Grok 内置、marketplace、依赖包内置、skill-manager 自身）不会被删除。
+### 导出报告
+
+```bash
+python cli.py export --format markdown --output skill-report.md
+python cli.py export --format json
+```
 
 ## 在 Agent 里使用
 
@@ -87,17 +100,15 @@ python cli.py delete --name my-skill
 - `/skill-manager`
 - `帮我扫描一下电脑里的 skills`
 - `安装这个 GitHub skill`
+- `禁用 xxx skill`
 - `删除没用的 xxx skill`
+- `导出 skill 报告`
 - `打开 skill 面板`
 
-## 发布到 GitHub
+## 发布
 
 ```bash
-git init
-git add .
-git commit -m "Initial release: skill manager"
-git branch -M main
-git remote add origin https://github.com/<your-user>/skill-manager.git
+git remote add origin https://github.com/funnaz/skill-manager.git
 git push -u origin main
 ```
 
@@ -105,14 +116,18 @@ git push -u origin main
 
 ```text
 skill-manager/
-  SKILL.md          # Agent 工作流说明
+  SKILL.md
   README.md
-  cli.py            # 命令行入口
-  server.py         # Web API + 面板
-  scanner.py        # 扫描与 agent 映射
-  manager.py        # 创建 / 安装 / 删除
+  constants.py
+  cli.py
+  server.py
+  scanner.py
+  manager.py
+  config_io.py
+  report.py
+  scripts/install.ps1
+  scripts/install.sh
   static/index.html
-  requirements.txt
 ```
 
 ## License

@@ -49,7 +49,11 @@
     .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
     .chip.active { background: rgba(91,140,255,.18); border-color: rgba(91,140,255,.55); color: #dbe7ff; }
     .skill-list { overflow: auto; max-height: calc(72vh - 40px); display: grid; gap: 10px; }
-    .skill-card { padding: 14px 16px; cursor: pointer; transition: .15s ease; }
+    .skill-card { padding: 14px 16px; cursor: pointer; transition: .15s ease; position: relative; }
+    .skill-card .pick { position: absolute; top: 12px; left: 12px; }
+    .skill-card.has-pick { padding-left: 42px; }
+    .github-link { color: #9ec1ff; text-decoration: none; }
+    .github-link:hover { text-decoration: underline; }
     .skill-card:hover, .skill-card.active { transform: translateY(-1px); border-color: rgba(91,140,255,.7); }
     .skill-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
     .skill-title h3 { margin: 0; font-size: 16px; }
@@ -86,9 +90,12 @@
     <div class="hero">
       <div>
         <h1>Skill 管家</h1>
-        <p>扫描、安装、创建和删除本机 Agent Skills。支持 Grok Build、Cursor、OpenAI Codex，以及共享的 <code>.agents/skills</code> 目录。</p>
+        <p>扫描、安装、创建、禁用和删除本机 Agent Skills。支持 Grok Build、Cursor、OpenAI Codex，以及共享的 <code>.agents/skills</code> 目录。</p>
+        <p><a class="github-link" id="githubLink" href="#" target="_blank" rel="noreferrer">GitHub 仓库</a></p>
       </div>
       <div class="actions">
+        <button id="exportBtn">导出报告</button>
+        <button id="batchDeleteBtn" class="danger">批量删除</button>
         <button id="createBtn">新建 Skill</button>
         <button id="installBtn">安装 Skill</button>
         <button id="refreshBtn" class="primary">重新扫描</button>
@@ -150,7 +157,7 @@
           </select>
         </label>
         <label>本地目录<input id="installPath" placeholder="C:\path\to\skill-folder" /></label>
-        <label>GitHub 仓库<input id="installGit" placeholder="https://github.com/user/repo.git" /></label>
+        <label>GitHub 仓库<input id="installGit" placeholder="https://github.com/funnaz/skill-manager.git" /></label>
         <label>仓库内子路径（可选）<input id="installSubpath" placeholder="skills/my-skill" /></label>
       </div>
       <div class="modal-actions">
@@ -163,7 +170,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { data: null, selectedId: null, search: "", agent: "all", category: "all" };
+    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all" };
     const $ = (id) => document.getElementById(id);
     const toast = (msg) => { const el = $("toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 3200); };
     const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -178,9 +185,14 @@
     }
 
     function renderStats() {
-      const { totals, scanned_at } = state.data;
-      $("stats").innerHTML = [["Skill 总数", totals.skills],["已配置 Agent", totals.agents_configured],["多 Agent 共享", totals.shared_skills],["可删除", state.data.skills.filter(s => s.deletable).length]]
+      const { totals, project } = state.data;
+      $("stats").innerHTML = [["Skill 总数", totals.skills],["已配置 Agent", totals.agents_configured],["多 Agent 共享", totals.shared_skills],["已禁用", totals.disabled]]
         .map(([l,v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
+      if (project?.github_url) {
+        const link = $("githubLink");
+        link.href = project.github_url;
+        link.textContent = project.github_url;
+      }
       document.title = `Skill 管家 · ${totals.skills}`;
     }
 
@@ -211,10 +223,11 @@
       const skills = filteredSkills();
       $("listCount").textContent = `(${skills.length})`;
       $("skillList").innerHTML = skills.length ? skills.map(s => `
-        <article class="skill-card ${state.selectedId===s.id?"active":""}" data-id="${escapeHtml(s.id)}">
+        <article class="skill-card has-pick ${state.selectedId===s.id?"active":""}" data-id="${escapeHtml(s.id)}">
+          ${s.deletable ? `<input class="pick" type="checkbox" data-pick="${escapeHtml(s.id)}" ${state.selectedBatch.has(s.id)?"checked":""} />` : ""}
           <div class="skill-title"><h3>${escapeHtml(s.name)}</h3><span class="tag">${escapeHtml(s.category)}</span></div>
           <div class="skill-desc">${escapeHtml(s.description || "无描述")}</div>
-          <div class="tag-row">${s.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("")}${s.deletable ? "" : '<span class="tag">受保护</span>'}</div>
+          <div class="tag-row">${s.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("")}${s.disabled ? '<span class="tag">已禁用</span>' : ""}${s.deletable ? "" : '<span class="tag">受保护</span>'}</div>
         </article>`).join("") : `<div class="empty">没有匹配的 Skill</div>`;
     }
 
@@ -227,6 +240,7 @@
         <div class="sub">${escapeHtml(skill.description || "无描述")}</div>
         <div class="detail-actions">
           ${skill.deletable ? `<button class="danger" id="deleteSelectedBtn">删除此 Skill</button>` : `<button disabled title="${escapeHtml(skill.delete_reason)}">不可删除</button>`}
+          ${skill.disabled ? `<button id="enableSelectedBtn">启用</button>` : `<button id="disableSelectedBtn">禁用</button>`}
         </div>
         <div class="detail-section"><h4>安装到哪些 Agent</h4><div class="tag-row">${skill.agent_labels.length ? skill.agent_labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("") : `<span class="tag">仅磁盘存在</span>`}</div></div>
         <div class="detail-section"><h4>元信息</h4><div class="kv">
@@ -239,6 +253,27 @@
         <div class="detail-section"><h4>SKILL.md</h4><pre class="markdown">${escapeHtml(content.raw || "")}</pre></div>`;
       const delBtn = $("deleteSelectedBtn");
       if (delBtn) delBtn.onclick = () => deleteSkill(skill);
+      const disableBtn = $("disableSelectedBtn");
+      if (disableBtn) disableBtn.onclick = () => toggleSkill(skill, "disable");
+      const enableBtn = $("enableSelectedBtn");
+      if (enableBtn) enableBtn.onclick = () => toggleSkill(skill, "enable");
+    }
+
+    async function toggleSkill(skill, action) {
+      await api(`/api/skills/${action}`, "POST", { name: skill.folder_name });
+      toast(`${action === "disable" ? "已禁用" : "已启用"} ${skill.name}`);
+      await loadData();
+    }
+
+    async function batchDeleteSelected() {
+      const names = [...state.selectedBatch];
+      if (!names.length) { toast("请先勾选要删除的 Skill"); return; }
+      if (!confirm(`确认批量删除 ${names.length} 个 Skill？`)) return;
+      const result = await api("/api/skills/batch-delete", "POST", { names });
+      toast(`已删除 ${result.deleted_count} 个，失败 ${result.failed_count} 个`);
+      state.selectedBatch.clear();
+      state.selectedId = null;
+      await loadData();
     }
 
     async function deleteSkill(skill) {
@@ -262,8 +297,25 @@
     $("searchInput").oninput = (e) => { state.search = e.target.value; renderSkillList(); };
     $("agentFilters").onclick = (e) => { const b = e.target.closest("[data-agent]"); if (!b) return; state.agent = b.dataset.agent; renderAgents(); renderSkillList(); };
     $("categoryFilters").onclick = (e) => { const b = e.target.closest("[data-category]"); if (!b) return; state.category = b.dataset.category; renderCategoryFilters(); renderSkillList(); };
-    $("skillList").onclick = (e) => { const c = e.target.closest("[data-id]"); if (!c) return; state.selectedId = c.dataset.id; renderSkillList(); renderDetail(state.data.skills.find(s => s.id === state.selectedId)); };
+    $("skillList").onclick = (e) => {
+      if (e.target.matches("[data-pick]")) {
+        const id = e.target.dataset.pick;
+        if (e.target.checked) state.selectedBatch.add(id); else state.selectedBatch.delete(id);
+        return;
+      }
+      const c = e.target.closest("[data-id]"); if (!c) return;
+      state.selectedId = c.dataset.id; renderSkillList(); renderDetail(state.data.skills.find(s => s.id === state.selectedId));
+    };
     $("refreshBtn").onclick = loadData;
+    $("batchDeleteBtn").onclick = batchDeleteSelected;
+    $("exportBtn").onclick = async () => {
+      const blob = await fetch("/api/export?fmt=markdown").then(r => r.blob());
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "skill-report.md"; a.click();
+      URL.revokeObjectURL(url);
+      toast("报告已导出");
+    };
     $("createBtn").onclick = () => openModal("createModal");
     $("installBtn").onclick = () => openModal("installModal");
     document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
