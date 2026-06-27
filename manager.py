@@ -13,7 +13,8 @@ from typing import Any
 
 import yaml
 
-from scanner import HOME, read_skill_content, scan_all
+from scanner import HOME, _read_frontmatter, read_skill_content, scan_all
+from skill_parser import parse_skill_md
 
 SKILL_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^[a-z]{1,2}$")
 PROTECTED_CATEGORIES = {"grok-bundled", "marketplace", "package"}
@@ -174,32 +175,68 @@ def can_delete(skill: dict[str, Any]) -> tuple[bool, str]:
 
 
 def create_skill(
-    name: str,
-    description: str,
+    name: str | None = None,
+    description: str | None = None,
     scope: str = "grok",
     body: str | None = None,
+    skill_md: str | None = None,
 ) -> dict[str, Any]:
-    skill_name = validate_skill_name(name)
+    if skill_md:
+        parsed = parse_skill_md(skill_md)
+        skill_name = validate_skill_name(name or parsed["name"])
+        final_desc = (description or parsed["description"]).strip()
+        content = parsed["skill_md"]
+        if name or description:
+            meta, body_text = _read_frontmatter(content)
+            meta["name"] = skill_name
+            meta["description"] = final_desc
+            content = _render_skill_md(meta, body_text)
+        analysis = {
+            "name_source": parsed["name_source"],
+            "description_source": parsed["description_source"],
+            "analysis_notes": parsed["analysis_notes"],
+            "triggers": parsed["triggers"],
+        }
+    else:
+        if not name or not description:
+            raise ValueError("未提供 Markdown 时，name 和 description 必填")
+        skill_name = validate_skill_name(name)
+        final_desc = description.strip()
+        content = _skill_template(skill_name, final_desc, body)
+        analysis = None
+
     dest_root = _resolve_scope(scope)
     dest = dest_root / skill_name
     dest_root.mkdir(parents=True, exist_ok=True)
     if dest.exists():
         raise FileExistsError(f"Skill 已存在: {dest}")
 
-    content = _skill_template(skill_name, description, body)
     dest.mkdir(parents=True)
     (dest / "SKILL.md").write_text(content, encoding="utf-8")
 
     if scope in {"agents", "project-agents"}:
         _update_lock_install(skill_name, "local", "manual")
 
-    return {
+    result = {
         "ok": True,
         "action": "create",
         "name": skill_name,
+        "description": final_desc,
         "scope": scope,
         "path": str(dest),
     }
+    if analysis:
+        result["analysis"] = analysis
+    return result
+
+
+def _render_skill_md(meta: dict[str, Any], body: str) -> str:
+    body_yaml = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False).strip()
+    body_text = body.strip()
+    rendered = f"---\n{body_yaml}\n---\n\n"
+    if body_text:
+        rendered += f"{body_text}\n"
+    return rendered
 
 
 def install_skill(

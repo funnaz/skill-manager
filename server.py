@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from config_io import disable_skill, enable_skill
 from constants import GITHUB_URL
 from manager import batch_delete, create_skill, delete_skill, install_skill
+from skill_parser import parse_skill_md
 from report import build_export_bytes, export_report
 from scanner import read_skill_content, scan_all
 from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
@@ -26,10 +27,15 @@ PORT = 5520
 
 
 class CreateSkillRequest(BaseModel):
-    name: str
-    description: str
+    name: str | None = None
+    description: str | None = None
     scope: str = "grok"
     body: str | None = None
+    skill_md: str | None = None
+
+
+class ParseSkillMdRequest(BaseModel):
+    content: str
 
 
 class InstallSkillRequest(BaseModel):
@@ -104,10 +110,24 @@ async def api_skill(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@APP.post("/api/skills/parse-md")
+async def api_parse_md(payload: ParseSkillMdRequest) -> dict[str, Any]:
+    try:
+        return parse_skill_md(payload.content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @APP.post("/api/skills/create")
 async def api_create(payload: CreateSkillRequest) -> dict[str, Any]:
     try:
-        return create_skill(payload.name, payload.description, payload.scope, payload.body)
+        return create_skill(
+            payload.name,
+            payload.description,
+            payload.scope,
+            payload.body,
+            payload.skill_md,
+        )
     except (ValueError, FileExistsError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

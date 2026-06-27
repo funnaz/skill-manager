@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from config_io import disable_skill, enable_skill
 from constants import GITHUB_INSTALL_CMD, GITHUB_URL
@@ -20,7 +21,10 @@ def cmd_scan(_: argparse.Namespace) -> int:
 
 
 def cmd_create(args: argparse.Namespace) -> int:
-    result = create_skill(args.name, args.description, args.scope, args.body)
+    skill_md = None
+    if args.from_md:
+        skill_md = Path(args.from_md).read_text(encoding="utf-8")
+    result = create_skill(args.name, args.description, args.scope, args.body, skill_md)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
@@ -107,10 +111,11 @@ def build_parser() -> argparse.ArgumentParser:
     scan_p.set_defaults(func=cmd_scan)
 
     create_p = sub.add_parser("create", help="创建新 skill")
-    create_p.add_argument("--name", required=True)
-    create_p.add_argument("--description", required=True)
+    create_p.add_argument("--name")
+    create_p.add_argument("--description")
     create_p.add_argument("--scope", default="grok", choices=["grok", "agents", "codex", "cursor", "project-grok", "project-agents"])
     create_p.add_argument("--body")
+    create_p.add_argument("--from-md", dest="from_md", help="从 Markdown 文件导入并自动解析名称与描述")
     create_p.set_defaults(func=cmd_create)
 
     install_p = sub.add_parser("install", help="安装 skill")

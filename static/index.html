@@ -413,10 +413,31 @@
     .form-grid input, .form-grid select {
       background: rgba(8, 12, 28, 0.7);
     }
-    .form-grid input:focus, .form-grid select:focus {
+    .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus {
       border-color: rgba(91, 140, 255, 0.55);
       box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.1);
     }
+    .form-grid textarea {
+      width: 100%;
+      min-height: 220px;
+      resize: vertical;
+      background: rgba(8, 12, 28, 0.7);
+      line-height: 1.55;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+    }
+    .create-analysis {
+      display: none;
+      padding: 10px 12px;
+      border-radius: var(--radius-xs);
+      background: rgba(91, 140, 255, 0.08);
+      border: 1px solid rgba(91, 140, 255, 0.22);
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .create-analysis.show { display: block; }
+    .create-analysis strong { color: #a8c4ff; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
     .modal-card.wide { width: min(900px, 100%); max-height: 86vh; overflow: auto; }
 
@@ -598,12 +619,17 @@
   </div>
 
   <div class="modal" id="createModal">
-    <div class="modal-card">
+    <div class="modal-card wide">
       <h3>新建 Skill</h3>
-      <p>在指定 scope 下创建标准 SKILL.md 模板。</p>
+      <p>粘贴 SKILL.md 或 Markdown 正文，系统会自动解析名称与功能描述。</p>
       <div class="form-grid">
-        <label>名称<input id="createName" placeholder="my-skill" /></label>
-        <label>描述<input id="createDesc" placeholder="这个 skill 做什么、何时触发" /></label>
+        <label>Markdown 内容
+          <textarea id="createMd" placeholder="可粘贴完整 SKILL.md，或仅粘贴正文（含标题、何时使用、触发方式等）"></textarea>
+        </label>
+        <button type="button" id="createAnalyzeBtn">分析内容</button>
+        <div class="create-analysis" id="createAnalysis"></div>
+        <label>名称（可修改）<input id="createName" placeholder="自动解析，如 my-skill" /></label>
+        <label>功能描述（可修改）<input id="createDesc" placeholder="自动解析：这个 skill 做什么、何时触发" /></label>
         <label>安装位置
           <select id="createScope">
             <option value="grok">Grok 用户 (~/.grok/skills)</option>
@@ -1063,7 +1089,56 @@
         }
       };
     });
-    $("createBtn").onclick = () => openModal("createModal");
+    let createAnalyzeTimer = null;
+
+    function renderCreateAnalysis(result) {
+      const box = $("createAnalysis");
+      if (!result) {
+        box.classList.remove("show");
+        box.innerHTML = "";
+        return;
+      }
+      const notes = (result.analysis_notes || []).map(n => `<div>• ${escapeHtml(n)}</div>`).join("");
+      const triggers = (result.triggers || []).slice(0, 3).map(t => `<div>• 触发：${escapeHtml(t)}</div>`).join("");
+      box.innerHTML = `<strong>解析完成</strong>
+        <div>标题：${escapeHtml(result.title || "-")}</div>
+        <div>建议名称：${escapeHtml(result.name || "-")}（${escapeHtml(result.name_source || "")}）</div>
+        <div>功能描述：${escapeHtml(result.description || "-")}（${escapeHtml(result.description_source || "")}）</div>
+        ${notes}${triggers}`;
+      box.classList.add("show");
+    }
+
+    async function analyzeCreateMd(showToast = true) {
+      const content = $("createMd").value.trim();
+      if (!content) {
+        renderCreateAnalysis(null);
+        if (showToast) toast("请先粘贴 Markdown 内容");
+        return null;
+      }
+      const result = await api("/api/skills/parse-md", "POST", { content });
+      $("createName").value = result.name || "";
+      $("createDesc").value = result.description || "";
+      renderCreateAnalysis(result);
+      if (showToast) toast("已自动解析名称与功能描述");
+      return result;
+    }
+
+    $("createBtn").onclick = () => {
+      $("createMd").value = "";
+      $("createName").value = "";
+      $("createDesc").value = "";
+      renderCreateAnalysis(null);
+      openModal("createModal");
+    };
+    $("createAnalyzeBtn").onclick = () => analyzeCreateMd(true).catch(err => toast(err.message));
+    $("createMd").addEventListener("input", () => {
+      clearTimeout(createAnalyzeTimer);
+      createAnalyzeTimer = setTimeout(() => {
+        if ($("createMd").value.trim().length >= 40) {
+          analyzeCreateMd(false).catch(() => {});
+        }
+      }, 700);
+    });
     $("installBtn").onclick = () => openModal("installModal");
     document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
     document.querySelectorAll(".modal").forEach((modal) => {
@@ -1077,8 +1152,20 @@
     });
     $("createSubmit").onclick = async () => {
       try {
-        const result = await api("/api/skills/create", "POST", { name: $("createName").value, description: $("createDesc").value, scope: $("createScope").value });
-        toast(`已创建 ${result.name}`); closeModal("createModal"); await loadData();
+        const skill_md = $("createMd").value.trim();
+        if (!skill_md) {
+          toast("请先粘贴 Markdown 内容");
+          return;
+        }
+        const result = await api("/api/skills/create", "POST", {
+          name: $("createName").value.trim() || null,
+          description: $("createDesc").value.trim() || null,
+          scope: $("createScope").value,
+          skill_md,
+        });
+        toast(`已创建 ${result.name}`);
+        closeModal("createModal");
+        await loadData();
       } catch (err) { toast(err.message); }
     };
     $("installSubmit").onclick = async () => {
