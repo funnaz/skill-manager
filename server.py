@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 import webbrowser
 from pathlib import Path
@@ -20,6 +21,7 @@ from skill_parser import parse_skill_md
 from report import build_export_bytes, export_report
 from scanner import read_skill_content, scan_all
 from updater import check_updates, merge_skill_integrated, merge_updates_into_scan, upgrade_skill
+from path_picker import pick_folder
 from user_settings import load_settings, save_settings
 
 APP = FastAPI(title="Skill Manager", version="2.3.0")
@@ -149,6 +151,15 @@ async def api_create(payload: CreateSkillRequest) -> dict[str, Any]:
         )
     except (ValueError, FileExistsError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@APP.post("/api/pick-folder")
+async def api_pick_folder() -> dict[str, Any]:
+    try:
+        path = await asyncio.to_thread(pick_folder)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"无法打开文件夹选择器：{exc}") from exc
+    return {"path": path}
 
 
 @APP.post("/api/skills/install")

@@ -485,6 +485,64 @@
     }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
     .modal-card.wide { width: min(900px, 100%); max-height: 86vh; overflow: auto; }
+    .install-settings {
+      margin-top: 4px;
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      background: rgba(91, 140, 255, 0.06);
+      border: 1px solid rgba(91, 140, 255, 0.18);
+    }
+    .install-settings-title {
+      margin: 0 0 4px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: #a8c4ff !important;
+      letter-spacing: 0.04em;
+    }
+    .install-settings-hint {
+      margin: 0 0 12px !important;
+      font-size: 11px !important;
+    }
+    .install-settings-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .install-settings-row label {
+      display: grid;
+      gap: 7px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .install-settings-row select {
+      background: rgba(8, 12, 28, 0.7);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 13px;
+    }
+    .install-settings-row select:focus {
+      border-color: rgba(91, 140, 255, 0.55);
+      box-shadow: 0 0 0 3px rgba(91, 140, 255, 0.1);
+      outline: none;
+    }
+    .install-settings-row button {
+      padding: 9px 16px;
+      white-space: nowrap;
+    }
+    .path-input-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .path-input-row button {
+      padding: 9px 16px;
+      white-space: nowrap;
+    }
 
     /* ── Update report ── */
     .report-summary {
@@ -633,7 +691,6 @@
         </div>
       </div>
       <div class="actions">
-        <button id="settingsBtn">默认设置</button>
         <button id="checkUpdatesBtn">检查更新</button>
         <div class="export-wrap">
           <button id="exportBtn">导出报告 ▾</button>
@@ -694,22 +751,6 @@
     </div>
   </div>
 
-  <div class="modal" id="settingsModal">
-    <div class="modal-card">
-      <h3>默认设置</h3>
-      <p>新建 / 安装 Skill 时，安装位置下拉框将把你的默认项置顶并预选。</p>
-      <div class="form-grid">
-        <label>默认安装位置
-          <select id="settingsDefaultScope"></select>
-        </label>
-      </div>
-      <div class="modal-actions">
-        <button data-close="settingsModal">取消</button>
-        <button class="primary" id="settingsSaveBtn">保存</button>
-      </div>
-    </div>
-  </div>
-
   <div class="modal" id="installModal">
     <div class="modal-card">
       <h3>安装 Skill</h3>
@@ -719,9 +760,24 @@
         <label>安装位置
           <select id="installScope"></select>
         </label>
-        <label>本地目录<input id="installPath" placeholder="C:\path\to\skill-folder" /></label>
+        <label>本地目录
+          <div class="path-input-row">
+            <input id="installPath" placeholder="C:\path\to\skill-folder" />
+            <button type="button" id="installPickPath">选择路径</button>
+          </div>
+        </label>
         <label>GitHub 仓库<input id="installGit" placeholder="https://github.com/funnaz/skill-manager.git" /></label>
         <label>仓库内子路径（可选）<input id="installSubpath" placeholder="skills/my-skill" /></label>
+      </div>
+      <div class="install-settings">
+        <p class="install-settings-title">默认安装位置</p>
+        <p class="install-settings-hint">新建 / 安装时，你的默认项会置顶并带 ★ 预选。</p>
+        <div class="install-settings-row">
+          <label>默认位置
+            <select id="settingsDefaultScope"></select>
+          </label>
+          <button type="button" id="settingsSaveBtn">保存</button>
+        </div>
       </div>
       <div class="modal-actions">
         <button data-close="installModal">取消</button>
@@ -1329,16 +1385,12 @@
       return result;
     }
 
-    $("settingsBtn").onclick = () => {
-      renderSettingsScopeSelect();
-      openModal("settingsModal");
-    };
     $("settingsSaveBtn").onclick = async () => {
       try {
         const settings = await api("/api/settings", "POST", { default_scope: $("settingsDefaultScope").value });
         if (state.data) state.data.settings = settings;
         renderScopeSelects();
-        closeModal("settingsModal");
+        renderSettingsScopeSelect();
         toast("默认安装位置已保存");
       } catch (err) {
         toast(err.message);
@@ -1369,7 +1421,21 @@
       clearTimeout(createAnalyzeTimer);
       createAnalyzeTimer = setTimeout(() => analyzeCreateMd(false).catch((err) => toast(err.message)), 150);
     });
-    $("installBtn").onclick = () => openModal("installModal");
+    $("installBtn").onclick = () => {
+      renderSettingsScopeSelect();
+      openModal("installModal");
+    };
+    $("installPickPath").onclick = async () => {
+      try {
+        const { path } = await api("/api/pick-folder", "POST");
+        if (path) {
+          $("installPath").value = path;
+          toast("已选择目录");
+        }
+      } catch (err) {
+        toast(err.message);
+      }
+    };
     document.querySelectorAll("[data-close]").forEach(el => el.onclick = () => closeModal(el.dataset.close));
     document.querySelectorAll(".modal").forEach((modal) => {
       modal.addEventListener("click", (e) => {
