@@ -319,6 +319,56 @@ def build_pdf_report(data: dict[str, Any] | None = None, lang: str = "zh") -> by
     return bytes(out)
 
 
+def _docx_font_name(lang: str) -> str:
+    return "黑体" if lang == "zh" else "Arial"
+
+
+def _apply_docx_font(doc: Any, font_name: str) -> None:
+    from docx.enum.style import WD_STYLE_TYPE
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    def set_run_font(run: Any) -> None:
+        run.font.name = font_name
+        r_pr = run._element.get_or_add_rPr()
+        r_fonts = r_pr.find(qn("w:rFonts"))
+        if r_fonts is None:
+            r_fonts = OxmlElement("w:rFonts")
+            r_pr.insert(0, r_fonts)
+        for key in ("ascii", "hAnsi", "eastAsia", "cs"):
+            r_fonts.set(qn(f"w:{key}"), font_name)
+
+    for style in doc.styles:
+        if style.type != WD_STYLE_TYPE.PARAGRAPH:
+            continue
+        try:
+            style.font.name = font_name
+            element = style.element
+            r_pr = element.find(qn("w:rPr"))
+            if r_pr is None:
+                r_pr = OxmlElement("w:rPr")
+                element.append(r_pr)
+            r_fonts = r_pr.find(qn("w:rFonts"))
+            if r_fonts is None:
+                r_fonts = OxmlElement("w:rFonts")
+                r_pr.insert(0, r_fonts)
+            for key in ("ascii", "hAnsi", "eastAsia", "cs"):
+                r_fonts.set(qn(f"w:{key}"), font_name)
+        except Exception:
+            continue
+
+    for paragraph in doc.paragraphs:
+        for run in paragraph.runs:
+            set_run_font(run)
+
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    for run in paragraph.runs:
+                        set_run_font(run)
+
+
 def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> bytes:
     try:
         from docx import Document
@@ -330,6 +380,7 @@ def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> b
     data = data or scan_all()
     meta = _report_meta(lang, data)
     analysis = _build_analysis(lang, data)
+    font_name = _docx_font_name(lang)
 
     doc = Document()
     title = doc.add_heading(meta["title"], level=0)
@@ -386,6 +437,8 @@ def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> b
         row[2].text = ", ".join(skill["agent_labels"]) or "-"
         row[3].text = meta["yes"] if skill["deletable"] else meta["no"]
         row[4].text = skill["resolved_path"]
+
+    _apply_docx_font(doc, font_name)
 
     buffer = io.BytesIO()
     doc.save(buffer)
