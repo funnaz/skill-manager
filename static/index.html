@@ -34,11 +34,7 @@
     body {
       margin: 0;
       font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
-      background:
-        radial-gradient(ellipse 80% 50% at 10% -10%, rgba(91, 140, 255, 0.22), transparent 50%),
-        radial-gradient(ellipse 60% 40% at 95% 0%, rgba(124, 92, 255, 0.18), transparent 45%),
-        radial-gradient(ellipse 50% 30% at 50% 100%, rgba(91, 140, 255, 0.08), transparent 50%),
-        var(--bg);
+      background: var(--bg);
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
@@ -79,7 +75,7 @@
     .hero-icon {
       width: 52px; height: 52px; flex-shrink: 0;
       background: linear-gradient(135deg, var(--accent), var(--accent-2));
-      border-radius: 14px;
+      border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 24px;
       box-shadow: 0 8px 24px var(--accent-glow);
@@ -88,7 +84,7 @@
       margin: 0 0 6px;
       font-size: 28px;
       font-weight: 700;
-      letter-spacing: -0.02em;
+      letter-spacing: 0;
       background: linear-gradient(135deg, #fff 30%, #a8c4ff);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -191,13 +187,13 @@
     .stat-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .stat .label { color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; }
     .stat-icon {
-      width: 32px; height: 32px; border-radius: 10px;
+      width: 32px; height: 32px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
       font-size: 15px;
       background: rgba(91, 140, 255, 0.12);
       border: 1px solid rgba(91, 140, 255, 0.2);
     }
-    .stat .value { font-size: 32px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+    .stat .value { font-size: 32px; font-weight: 700; letter-spacing: 0; line-height: 1; }
 
     /* ── Layout ── */
     .layout {
@@ -303,7 +299,7 @@
       box-shadow: 0 4px 20px rgba(91, 140, 255, 0.12);
     }
     .skill-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; align-items: center; }
-    .skill-title h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+    .skill-title h3 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0; }
     .skill-desc {
       color: var(--muted); font-size: 12px; line-height: 1.55; margin-bottom: 10px;
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -336,7 +332,7 @@
     /* ── Detail panel ── */
     .detail { overflow: auto; max-height: 74vh; padding: 24px !important; }
     .detail-header { margin-bottom: 20px; }
-    .detail h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .detail h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: 0; }
     .detail .sub { font-size: 13px; margin-bottom: 0; color: var(--muted); line-height: 1.6; }
     .detail-actions { display: flex; gap: 8px; margin: 18px 0; flex-wrap: wrap; }
     .detail-card { padding: 16px 18px; margin-bottom: 12px; }
@@ -556,7 +552,7 @@
       border: 1px solid var(--border);
       min-width: 110px;
     }
-    .report-pill .num { font-size: 24px; font-weight: 700; letter-spacing: -0.03em; line-height: 1; }
+    .report-pill .num { font-size: 24px; font-weight: 700; letter-spacing: 0; line-height: 1; }
     .report-pill .lbl { font-size: 11px; color: var(--muted); }
     .report-pill.official .num { color: var(--accent); }
     .report-pill.local .num { color: var(--warn); }
@@ -668,11 +664,549 @@
       color: #a8c4ff;
     }
 
+    .usage-panel {
+      margin-bottom: 20px;
+      padding: 22px 24px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+    .usage-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .usage-head h2 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .usage-note {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+    .usage-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .usage-card {
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgba(11, 16, 32, 0.35);
+    }
+    .usage-card .label { color: var(--muted); font-size: 12px; }
+    .usage-card .value { font-size: 22px; font-weight: 700; margin-top: 4px; }
+    .usage-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .usage-table th, .usage-table td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid rgba(36, 48, 79, 0.55);
+    }
+    .usage-table th { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .usage-hooks {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+    .hook-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: rgba(11, 16, 32, 0.35);
+    }
+    .hook-pill.ok { border-color: rgba(52, 211, 153, 0.35); color: #6ee7b7; }
+    .hook-pill.warn { border-color: rgba(251, 191, 36, 0.35); color: #fcd34d; }
+
+    /* ── UI polish pass ── */
+    :root {
+      --bg: #090d14;
+      --panel: rgba(17, 24, 39, 0.86);
+      --panel-solid: #101827;
+      --panel-2: #172033;
+      --panel-hover: #1d293d;
+      --border: rgba(83, 98, 129, 0.32);
+      --border-light: rgba(77, 163, 255, 0.36);
+      --text: #edf3fb;
+      --muted: #9ba8bf;
+      --accent: #4da3ff;
+      --accent-2: #20c997;
+      --accent-glow: rgba(77, 163, 255, 0.24);
+      --shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+      --shadow-sm: 0 10px 24px rgba(0, 0, 0, 0.22);
+      --radius: 8px;
+      --radius-sm: 8px;
+      --radius-xs: 6px;
+    }
+
+    body {
+      background: linear-gradient(180deg, #090d14 0%, #0c111b 52%, #090d14 100%);
+      letter-spacing: 0;
+    }
+
+    .app {
+      max-width: 1560px;
+      padding: 24px 24px 36px;
+    }
+
+    .hero {
+      align-items: center;
+      margin-bottom: 16px;
+      padding: 20px 22px;
+      border-color: rgba(83, 98, 129, 0.28);
+      box-shadow: none;
+    }
+
+    .hero::before {
+      background: linear-gradient(90deg, transparent, rgba(77, 163, 255, 0.5), rgba(32, 201, 151, 0.45), transparent);
+    }
+
+    .hero-brand {
+      align-items: center;
+      gap: 16px;
+      min-width: 360px;
+    }
+
+    .hero-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 8px;
+      box-shadow: 0 8px 22px rgba(77, 163, 255, 0.22);
+    }
+
+    .hero h1,
+    .detail h2,
+    .stat .value,
+    .report-pill .num {
+      letter-spacing: 0;
+    }
+
+    .hero h1 {
+      margin-bottom: 4px;
+      font-size: 26px;
+      background: none;
+      -webkit-text-fill-color: currentColor;
+      color: #f7fbff;
+    }
+
+    .hero-desc {
+      max-width: 560px;
+      line-height: 1.65;
+    }
+
+    .hero-meta {
+      margin-top: 10px;
+    }
+
+    .actions {
+      max-width: 760px;
+      gap: 7px;
+    }
+
+    button {
+      min-height: 34px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: none;
+    }
+
+    button:hover:not(:disabled) {
+      transform: none;
+      box-shadow: none;
+    }
+
+    button.primary {
+      box-shadow: 0 8px 24px rgba(77, 163, 255, 0.2);
+    }
+
+    #refreshBtn {
+      min-width: 92px;
+    }
+
+    #batchDeleteBtn {
+      border-color: rgba(251, 113, 133, 0.42);
+    }
+
+    .stats {
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .stat {
+      min-height: 86px;
+      padding: 16px 18px;
+      box-shadow: none;
+    }
+
+    .stat:hover {
+      transform: none;
+    }
+
+    .stat-top {
+      margin-bottom: 8px;
+    }
+
+    .stat-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 7px;
+      font-size: 14px;
+    }
+
+    .stat .value {
+      font-size: 28px;
+    }
+
+    .usage-panel {
+      max-height: 248px;
+      overflow: auto;
+      margin-bottom: 14px;
+      padding: 18px 20px;
+      box-shadow: none;
+    }
+
+    .usage-head {
+      margin-bottom: 10px;
+    }
+
+    .usage-note {
+      margin-bottom: 12px;
+    }
+
+    .usage-grid {
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .usage-card {
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: rgba(8, 13, 22, 0.36);
+    }
+
+    .usage-card .value {
+      font-size: 21px;
+    }
+
+    .usage-table th,
+    .usage-table td {
+      padding: 8px;
+    }
+
+    .usage-table th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #111827;
+    }
+
+    .layout {
+      grid-template-columns: 286px minmax(520px, 1fr) 382px;
+      gap: 14px;
+      min-height: 66vh;
+    }
+
+    .stat,
+    .agent-card,
+    .skill-card,
+    .detail,
+    .filters,
+    .list-panel,
+    .modal-card,
+    .detail-card,
+    .usage-panel,
+    .usage-card,
+    .update-section,
+    .update-item,
+    .report-pill {
+      border-radius: 8px;
+    }
+
+    .filters,
+    .list-panel,
+    .detail {
+      padding: 16px;
+    }
+
+    .panel-title {
+      margin-bottom: 12px;
+      letter-spacing: 0.08em;
+    }
+
+    .agent-grid {
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .agent-card {
+      padding: 12px 14px;
+      box-shadow: none;
+    }
+
+    .search {
+      min-height: 36px;
+      background: rgba(8, 13, 22, 0.5);
+    }
+
+    .chip-row {
+      gap: 7px;
+    }
+
+    .chip,
+    .tag,
+    .badge,
+    .hero-badge,
+    .hook-pill {
+      border-radius: 999px;
+    }
+
+    .chip {
+      padding: 6px 11px;
+      background: rgba(8, 13, 22, 0.42);
+    }
+
+    .chip.active {
+      background: rgba(77, 163, 255, 0.16);
+      border-color: rgba(77, 163, 255, 0.48);
+      color: #dcecff;
+    }
+
+    .skill-list {
+      max-height: calc(100vh - 278px);
+      gap: 7px;
+    }
+
+    .skill-card {
+      padding: 13px 15px;
+      border-left-width: 2px;
+      box-shadow: none;
+    }
+
+    .skill-card.has-pick {
+      padding-left: 40px;
+    }
+
+    .skill-card .pick {
+      top: 15px;
+      left: 14px;
+    }
+
+    .skill-card:hover {
+      transform: none;
+      background: rgba(29, 41, 61, 0.55);
+    }
+
+    .skill-card.active {
+      background: rgba(77, 163, 255, 0.12);
+      box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.18);
+    }
+
+    .skill-title h3 {
+      font-size: 14px;
+      letter-spacing: 0;
+    }
+
+    .skill-desc {
+      margin-bottom: 9px;
+      line-height: 1.5;
+    }
+
+    .tag {
+      padding: 3px 7px;
+      letter-spacing: 0;
+    }
+
+    .detail {
+      max-height: calc(100vh - 278px);
+      padding: 18px !important;
+    }
+
+    .detail-header {
+      margin-bottom: 16px;
+    }
+
+    .detail h2 {
+      font-size: 21px;
+    }
+
+    .detail-actions {
+      margin: 14px 0;
+    }
+
+    .detail-card {
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      box-shadow: none;
+    }
+
+    .detail-section h4 {
+      margin-bottom: 10px;
+      letter-spacing: 0.08em;
+    }
+
+    .kv div {
+      grid-template-columns: 92px 1fr;
+      gap: 10px;
+      padding: 7px 0;
+    }
+
+    .markdown {
+      border-radius: 8px;
+      max-height: 300px;
+      background: rgba(5, 10, 18, 0.74);
+    }
+
+    .modal {
+      padding: 20px;
+    }
+
+    .modal-card {
+      padding: 24px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+    }
+
+    .modal-card.wide {
+      width: min(960px, 100%);
+    }
+
+    .form-grid {
+      gap: 12px;
+    }
+
+    .form-grid input,
+    .form-grid select,
+    .form-grid textarea,
+    select,
+    textarea,
+    input[type=text] {
+      border-radius: 8px;
+      min-height: 36px;
+      background: rgba(7, 12, 21, 0.65);
+    }
+
+    .md-dropzone textarea {
+      min-height: 180px;
+    }
+
+    .report-summary {
+      margin: 14px 0 16px;
+    }
+
+    .export-menu {
+      border-radius: 8px;
+    }
+
+    .toast {
+      border-radius: 8px;
+      right: 20px;
+      bottom: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .app {
+        padding: 16px 12px 28px;
+      }
+
+      .hero {
+        padding: 16px;
+      }
+
+      .hero-brand {
+        min-width: 0;
+      }
+
+      .hero-icon {
+        width: 40px;
+        height: 40px;
+      }
+
+      .hero h1 {
+        font-size: 22px;
+      }
+
+      .actions {
+        width: 100%;
+        max-width: none;
+      }
+
+      .actions button,
+      .export-wrap {
+        flex: 1 1 132px;
+      }
+
+      .export-wrap button {
+        width: 100%;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .layout {
+        gap: 12px;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .usage-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .actions button,
+      .export-wrap {
+        flex-basis: 100%;
+      }
+
+      .path-input-row,
+      .install-settings-row {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-actions {
+        flex-direction: column-reverse;
+      }
+
+      .modal-actions button {
+        width: 100%;
+      }
+    }
+
     @media (max-width: 1180px) {
-      .layout, .stats { grid-template-columns: 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      .stats, .usage-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .skill-list, .detail { max-height: none; }
       .hero { flex-direction: column; }
       .actions { justify-content: flex-start; }
+    }
+
+    @media (max-width: 560px) {
+      .stats,
+      .usage-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -683,7 +1217,7 @@
         <div class="hero-icon">⚡</div>
         <div>
           <h1>Skill 管家</h1>
-          <p class="hero-desc">扫描、安装、创建、禁用和删除本机 Agent Skills。支持 Grok Build、Cursor、OpenAI Codex，以及共享的 <code>.agents/skills</code> 目录。</p>
+          <p class="hero-desc">扫描、安装、创建、禁用和删除本机 Agent Skills。支持 Grok Build、Claude Code、OpenAI Codex、Cursor，以及共享的 <code>.agents/skills</code> 目录。</p>
           <div class="hero-meta">
             <span class="hero-badge">运行中</span>
             <a class="github-link" id="githubLink" href="#" target="_blank" rel="noreferrer">↗ GitHub 仓库</a>
@@ -691,10 +1225,17 @@
         </div>
       </div>
       <div class="actions">
+        <button id="usageCollectBtn">刷新使用统计</button>
+        <button id="usageHooksBtn">安装统计 Hooks</button>
         <button id="checkUpdatesBtn">检查更新</button>
+        <button id="batchUpgradeBtn">批量升级</button>
         <div class="export-wrap">
           <button id="exportBtn">导出报告 ▾</button>
         </div>
+        <button id="backupsBtn">备份恢复</button>
+        <button id="trashBtn">回收站</button>
+        <button id="auditBtn">操作日志</button>
+        <button id="shareBtn">只读分享</button>
         <button id="batchDeleteBtn" class="danger">批量删除</button>
         <button id="createBtn">新建 Skill</button>
         <button id="installBtn">安装 Skill</button>
@@ -702,6 +1243,28 @@
       </div>
     </div>
     <div class="stats" id="stats"></div>
+    <section class="usage-panel" id="usagePanel">
+      <div class="usage-head">
+        <h2>使用统计</h2>
+        <span class="hero-badge" id="usageUpdatedAt">未采集</span>
+      </div>
+      <p class="usage-note" id="usageNote">覆盖 Claude Code 与 Codex（含 Grok 会话日志）。统计口径为「本机可观测事件」，不等同于精确调用次数。</p>
+      <div class="usage-hooks" id="usageHooks"></div>
+      <div class="usage-grid" id="usageSummary"></div>
+      <table class="usage-table">
+        <thead>
+          <tr>
+            <th>Skill</th>
+            <th>次数</th>
+            <th>最近使用</th>
+            <th>平台</th>
+          </tr>
+        </thead>
+        <tbody id="usageTableBody">
+          <tr><td colspan="4" style="color:var(--muted)">点击「刷新使用统计」开始采集</td></tr>
+        </tbody>
+      </table>
+    </section>
     <div class="layout">
       <section class="filters">
         <p class="panel-title">Agent 概览</p>
@@ -798,6 +1361,27 @@
     </div>
   </div>
 
+  <div class="modal" id="backupsModal">
+    <div class="modal-card wide">
+      <h3>备份恢复</h3>
+      <p>整合或恢复前产生的本地备份。恢复会先备份当前版本，再用选中的备份覆盖。</p>
+      <div id="backupsBody"></div>
+      <div class="modal-actions">
+        <button data-close="backupsModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="simpleModal">
+    <div class="modal-card wide">
+      <h3 id="simpleModalTitle">详情</h3>
+      <div id="simpleModalBody"></div>
+      <div class="modal-actions">
+        <button data-close="simpleModal">关闭</button>
+      </div>
+    </div>
+  </div>
+
   <div class="export-menu" id="exportMenu">
     <p class="export-menu-title">点击即可下载报告（含分析解读）</p>
     <div class="export-grid">
@@ -807,11 +1391,15 @@
         <button data-export data-lang="zh" data-fmt="docx">Word (.docx)</button>
         <button data-export data-lang="zh" data-fmt="md">Markdown (.md)</button>
         <button data-export data-lang="zh" data-fmt="pdf">PDF (.pdf)</button>
+        <button data-export data-lang="zh" data-fmt="csv">CSV (.csv)</button>
+        <button data-export data-lang="zh" data-fmt="html">HTML (.html)</button>
       </div>
       <div class="export-btns">
         <button data-export data-lang="en" data-fmt="docx">Word (.docx)</button>
         <button data-export data-lang="en" data-fmt="md">Markdown (.md)</button>
         <button data-export data-lang="en" data-fmt="pdf">PDF (.pdf)</button>
+        <button data-export data-lang="en" data-fmt="csv">CSV (.csv)</button>
+        <button data-export data-lang="en" data-fmt="html">HTML (.html)</button>
       </div>
     </div>
   </div>
@@ -819,7 +1407,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const state = { data: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all", withUpdates: false, lastParseResult: null };
+    const state = { data: null, usage: null, token: null, selectedId: null, selectedBatch: new Set(), search: "", agent: "all", category: "all", withUpdates: false, lastParseResult: null };
     const $ = (id) => document.getElementById(id);
     const toast = (msg) => { const el = $("toast"); el.textContent = msg; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 3200); };
     const escapeHtml = (t) => String(t ?? "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
@@ -829,9 +1417,12 @@
     const SCOPE_OPTIONS = [
       ["agents", "共享 Agents", ".agents/skills"],
       ["codex", "Codex", ".codex/skills"],
+      ["claude", "Claude", ".claude/skills"],
       ["cursor", "Cursor", ".cursor/skills"],
       ["grok", "Grok 用户", ".grok/skills"],
     ];
+
+    const AGENT_LABELS = { grok: "Grok", claude: "Claude", codex: "Codex", cursor: "Cursor" };
 
     function formatScopePath(home, rel) {
       const sep = home.includes("\\") ? "\\" : "/";
@@ -888,8 +1479,20 @@
       ["已禁用", "totals.disabled", "⊘", "#fb7185"],
     ];
 
+    async function ensureSession() {
+      if (state.token) return state.token;
+      const res = await fetch("/api/session");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.token) throw new Error(data.detail || "无法建立本地会话");
+      state.token = data.token;
+      return state.token;
+    }
+
     async function api(path, method = "GET", body) {
-      const res = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : {}, body: body ? JSON.stringify(body) : undefined });
+      const token = path === "/api/session" ? null : await ensureSession();
+      const headers = body ? { "Content-Type": "application/json" } : {};
+      if (token) headers["X-Skill-Manager-Token"] = token;
+      const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "请求失败");
       return data;
@@ -1002,6 +1605,7 @@
             <div><span>可删除</span><span>${skill.deletable ? "是" : escapeHtml(skill.delete_reason)}</span></div>
           </div></div>
         </div>
+        ${renderHealth(skill)}
         ${renderLocalChanges(skill)}
         <div class="detail-card">
           <div class="detail-section"><h4>SKILL.md</h4><pre class="markdown">${escapeHtml(content.raw || "")}</pre></div>
@@ -1016,6 +1620,21 @@
       if (upgradeBtn) upgradeBtn.onclick = () => upgradeSkill(skill);
       const mergeBtn = $("mergeSelectedBtn");
       if (mergeBtn) mergeBtn.onclick = () => mergeSkill(skill);
+    }
+
+    function renderHealth(skill) {
+      const health = skill.health || {};
+      const deps = skill.dependencies || {};
+      const issues = health.issues || [];
+      const missing = [...(deps.missing_python || []), ...(deps.missing_env || [])];
+      const conflicts = skill.conflicts || [];
+      return `<div class="detail-card"><div class="detail-section"><h4>健康检查</h4><div class="kv">
+        <div><span>评分</span><span>${escapeHtml(health.score ?? "-")} / 100 · ${escapeHtml(health.grade || "-")}</span></div>
+        <div><span>触发词</span><span>${escapeHtml((skill.triggers || []).join("、") || "-")}</span></div>
+        <div><span>冲突</span><span>${conflicts.length ? escapeHtml(conflicts.join("、")) : "无"}</span></div>
+        <div><span>缺失依赖</span><span>${missing.length ? escapeHtml(missing.join("、")) : "无"}</span></div>
+        <div><span>问题</span><span>${issues.length ? escapeHtml(issues.join("；")) : "无明显问题"}</span></div>
+      </div></div></div>`;
     }
 
     function renderLocalChanges(skill) {
@@ -1098,6 +1717,80 @@
       return html || `<div class="empty">所有可检查 skill 都是最新，且没有待处理的本地改动。</div>`;
     }
 
+    function renderBackups(backups) {
+      if (!backups?.length) return `<div class="empty">暂无可恢复备份。</div>`;
+      return backups.map((backup) => {
+        const target = (state.data?.skills || []).find((s) => s.folder_name === backup.name || s.name === backup.name);
+        const disabled = target ? "" : " disabled";
+        const targetText = target ? target.resolved_path : "未找到当前同名 Skill，需用 CLI 指定 target-path";
+        return `<div class="update-item">
+          <div class="update-item-head">
+            <strong>${escapeHtml(backup.id)}</strong>
+            <span class="tag">${escapeHtml(backup.modified_at || "")}</span>
+          </div>
+          <div class="update-diff">目标：${escapeHtml(targetText)}</div>
+          <div style="margin-top:10px">
+            <button data-restore="${escapeHtml(backup.id)}" data-target="${escapeHtml(target?.resolved_path || "")}"${disabled}>恢复</button>
+          </div>
+        </div>`;
+      }).join("");
+    }
+
+    async function openBackupsModal() {
+      const result = await api("/api/backups");
+      $("backupsBody").innerHTML = renderBackups(result.backups);
+      openModal("backupsModal");
+    }
+
+    function openSimpleModal(title, html) {
+      $("simpleModalTitle").textContent = title;
+      $("simpleModalBody").innerHTML = html;
+      openModal("simpleModal");
+    }
+
+    async function openAuditModal() {
+      const result = await api("/api/audit?limit=80");
+      const html = result.events?.length ? result.events.reverse().map((event) => `
+        <div class="update-item">
+          <div class="update-item-top"><strong>${escapeHtml(event.action)}</strong><span class="tag">${escapeHtml(event.ts || "")}</span></div>
+          <pre class="markdown" style="max-height:120px">${escapeHtml(JSON.stringify(event, null, 2))}</pre>
+        </div>`).join("") : `<div class="empty">暂无操作日志</div>`;
+      openSimpleModal("操作日志", html);
+    }
+
+    async function openTrashModal() {
+      const result = await api("/api/trash");
+      const html = result.items?.length ? result.items.map((item) => `
+        <div class="update-item">
+          <div class="update-item-top"><strong>${escapeHtml(item.name)}</strong><span class="tag">${escapeHtml(item.deleted_at || "")}</span></div>
+          <div class="update-diff">${escapeHtml(item.original_path || "")}</div>
+          <div style="margin-top:10px"><button data-trash-restore="${escapeHtml(item.id)}">还原</button></div>
+        </div>`).join("") : `<div class="empty">回收站为空</div>`;
+      openSimpleModal("回收站", html);
+    }
+
+    $("simpleModalBody").onclick = async (e) => {
+      const btn = e.target.closest("[data-trash-restore]");
+      if (!btn) return;
+      if (!confirm("确认从回收站还原？")) return;
+      const result = await api("/api/trash/restore", "POST", { trash_id: btn.dataset.trashRestore });
+      toast(`已还原到 ${result.restored_to}`);
+      closeModal("simpleModal");
+      await loadData();
+    };
+
+    $("backupsBody").onclick = async (e) => {
+      const btn = e.target.closest("[data-restore]");
+      if (!btn) return;
+      const backupId = btn.dataset.restore;
+      const targetPath = btn.dataset.target;
+      if (!confirm(`确认从备份恢复？\n${backupId}\n\n当前版本会先自动备份。`)) return;
+      const result = await api("/api/backups/restore", "POST", { backup_id: backupId, target_path: targetPath || null });
+      toast(`已恢复到 ${result.restored_to}`);
+      closeModal("backupsModal");
+      await loadData();
+    };
+
     function bindUpdateReportActions() {
       $("updateReportBody").onclick = async (e) => {
         const mergeName = e.target.dataset.merge;
@@ -1138,7 +1831,9 @@
     async function batchDeleteSelected() {
       const names = [...state.selectedBatch];
       if (!names.length) { toast("请先勾选要删除的 Skill"); return; }
-      if (!confirm(`确认批量删除 ${names.length} 个 Skill？`)) return;
+      const preview = await api("/api/skills/batch-delete", "POST", { names, dry_run: true });
+      const paths = (preview.deleted || []).map((item) => item.path).join("\n");
+      if (!confirm(`确认批量删除 ${names.length} 个 Skill？\n\n${paths}`)) return;
       const result = await api("/api/skills/batch-delete", "POST", { names });
       toast(`已删除 ${result.deleted_count} 个，失败 ${result.failed_count} 个`);
       state.selectedBatch.clear();
@@ -1147,11 +1842,61 @@
     }
 
     async function deleteSkill(skill) {
-      if (!confirm(`确认删除 ${skill.name}？\n${skill.resolved_path}`)) return;
+      const preview = await api("/api/skills/delete", "POST", { resolved_path: skill.resolved_path, dry_run: true });
+      if (!confirm(`确认删除 ${skill.name}？\n${preview.path}`)) return;
       await api("/api/skills/delete", "POST", { resolved_path: skill.resolved_path });
       toast(`已删除 ${skill.name}`);
       state.selectedId = null;
       await loadData();
+    }
+
+    function formatTs(ts) {
+      if (!ts) return "—";
+      const d = new Date(ts);
+      return Number.isNaN(d.getTime()) ? ts : d.toLocaleString("zh-CN");
+    }
+
+    function renderUsage() {
+      const usage = state.usage;
+      if (!usage?.stats) return;
+      const { stats, hooks } = usage;
+      $("usageNote").textContent = stats.note || $("usageNote").textContent;
+      $("usageUpdatedAt").textContent = usage.collect?.last_collect_at ? `更新于 ${formatTs(usage.collect.last_collect_at)}` : "已统计";
+      $("usageHooks").innerHTML = [
+        ["claude", hooks?.claude],
+        ["codex", hooks?.codex],
+        ["grok", hooks?.grok],
+      ].map(([key, item]) => {
+        const ok = item?.installed;
+        const label = AGENT_LABELS[key] || key;
+        const mode = item?.mode ? ` · ${item.mode}` : "";
+        return `<span class="hook-pill ${ok ? "ok" : "warn"}">${label}${ok ? " 已接入" : " 待配置"}${mode}</span>`;
+      }).join("");
+      const agentRows = Object.entries(stats.by_agent || {});
+      $("usageSummary").innerHTML = [
+        ["总事件", stats.total_events],
+        ["涉及 Skill", stats.unique_skills],
+        ["Claude 事件", stats.by_agent?.claude || 0],
+        ["Codex 事件", stats.by_agent?.codex || 0],
+      ].map(([label, value]) => `
+        <div class="usage-card">
+          <div class="label">${label}</div>
+          <div class="value">${value ?? 0}</div>
+        </div>`).join("");
+      const rows = (stats.top || []).slice(0, 15);
+      $("usageTableBody").innerHTML = rows.length ? rows.map((row) => `
+        <tr>
+          <td><code>${escapeHtml(row.skill)}</code></td>
+          <td>${row.count}</td>
+          <td>${escapeHtml(formatTs(row.last_at))}</td>
+          <td>${escapeHtml(Object.keys(row.agents || {}).map((k) => AGENT_LABELS[k] || k).join(" · ") || "—")}</td>
+        </tr>`).join("") : `<tr><td colspan="4" style="color:var(--muted)">暂无使用记录。先在 Claude/Codex 中使用 skill，再点「刷新使用统计」。</td></tr>`;
+    }
+
+    async function loadUsage(refresh = true) {
+      const endpoint = refresh ? "/api/usage/collect" : "/api/usage/stats?refresh=false";
+      state.usage = await api(endpoint, refresh ? "POST" : "GET");
+      renderUsage();
     }
 
     async function loadData() {
@@ -1162,6 +1907,7 @@
       renderStats(); renderAgents(); renderCategoryFilters(); renderSkillList(); renderScopeSelects();
       const selected = state.data.skills.find(s => s.id === state.selectedId);
       await renderDetail(selected);
+      try { await loadUsage(false); } catch (_) { /* usage optional on first load */ }
       document.body.classList.remove("loading");
     }
 
@@ -1178,6 +1924,48 @@
       state.selectedId = c.dataset.id; renderSkillList(); renderDetail(state.data.skills.find(s => s.id === state.selectedId));
     };
     $("refreshBtn").onclick = () => { state.withUpdates = false; loadData(); };
+    $("backupsBtn").onclick = () => openBackupsModal().catch(err => toast(err.message));
+    $("auditBtn").onclick = () => openAuditModal().catch(err => toast(err.message));
+    $("trashBtn").onclick = () => openTrashModal().catch(err => toast(err.message));
+    $("shareBtn").onclick = () => window.open("/share", "_blank");
+    $("batchUpgradeBtn").onclick = async () => {
+      if (!confirm("确认批量升级所有检测到的可更新 Skill？会按各自升级逻辑执行。")) return;
+      document.body.classList.add("loading");
+      try {
+        const result = await api("/api/skills/batch-upgrade", "POST", {});
+        const okCount = result.results?.filter(r => r.ok).length || 0;
+        const skippedCount = result.results?.filter(r => r.skipped).length || 0;
+        toast(`批量升级完成：${okCount} 个成功，${skippedCount} 个需整合已跳过`);
+        state.withUpdates = true;
+        await loadData();
+      } catch (err) {
+        toast(err.message || "批量升级失败");
+      } finally {
+        document.body.classList.remove("loading");
+      }
+    };
+    $("usageCollectBtn").onclick = async () => {
+      document.body.classList.add("loading");
+      try {
+        await loadUsage(true);
+        const added = state.usage?.collect?.added ?? 0;
+        toast(added ? `采集完成，新增 ${added} 条事件` : "采集完成，无新增事件");
+      } catch (err) {
+        toast(err.message || "采集失败");
+      } finally {
+        document.body.classList.remove("loading");
+      }
+    };
+    $("usageHooksBtn").onclick = async () => {
+      try {
+        const result = await api("/api/usage/hooks/install", "POST");
+        toast("已写入 Claude hooks；Codex 使用 rollout 会话扫描");
+        state.usage = { ...(state.usage || {}), hooks: result };
+        renderUsage();
+      } catch (err) {
+        toast(err.message || "安装 hooks 失败");
+      }
+    };
     $("checkUpdatesBtn").onclick = async () => {
       document.body.classList.add("loading");
       toast("正在检查远程版本...");
@@ -1228,7 +2016,10 @@
 
     async function downloadReport(lang, fmt) {
       toast(lang === "zh" ? "正在生成报告…" : "Generating report…");
-      const res = await fetch(`/api/export?fmt=${encodeURIComponent(fmt)}&lang=${encodeURIComponent(lang)}`);
+      const token = await ensureSession();
+      const res = await fetch(`/api/export?fmt=${encodeURIComponent(fmt)}&lang=${encodeURIComponent(lang)}`, {
+        headers: { "X-Skill-Manager-Token": token },
+      });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.detail || "导出失败");

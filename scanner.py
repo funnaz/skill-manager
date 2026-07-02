@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from health_analyzer import analyze_skill_quality, annotate_conflicts, build_conflicts
 
 HOME = Path.home()
 
@@ -50,6 +51,12 @@ AGENT_PROFILES: dict[str, dict[str, Any]] = {
         "color": "#10A37F",
         "scan_roots": [HOME / ".codex" / "skills", HOME / ".agents" / "skills"],
     },
+    "claude": {
+        "label": "Claude Code",
+        "short": "Claude",
+        "color": "#D97757",
+        "scan_roots": [HOME / ".claude" / "skills", HOME / ".agents" / "skills"],
+    },
 }
 
 CATEGORY_LABELS = {
@@ -58,6 +65,7 @@ CATEGORY_LABELS = {
     "agents-shared": "共享 Agents",
     "cursor-native": "Cursor 原生",
     "codex-native": "Codex 原生",
+    "claude-native": "Claude 原生",
     "marketplace": "Marketplace",
     "custom": "用户自定义",
     "package": "依赖包内置",
@@ -92,6 +100,10 @@ class SkillRecord:
     update_status: str | None = None
     remote_version: str | None = None
     has_update: bool = False
+    dependencies: dict[str, Any] = field(default_factory=dict)
+    triggers: list[str] = field(default_factory=list)
+    conflicts: list[str] = field(default_factory=list)
+    health: dict[str, Any] = field(default_factory=dict)
 
 
 def _is_package_path(path: Path) -> bool:
@@ -171,6 +183,8 @@ def _category_for_path(path: Path, resolved: Path, is_junction: bool, in_marketp
         return "cursor-native"
     if "/.codex/skills/" in normalized:
         return "codex-native"
+    if "/.claude/skills/" in normalized:
+        return "claude-native"
     return "custom"
 
 
@@ -256,6 +270,18 @@ def scan_all() -> dict[str, Any]:
                 "update_status": None,
                 "remote_version": None,
                 "has_update": False,
+                "dependencies": {},
+                "triggers": [],
+                "conflicts": [],
+                "health": {},
+            }
+            quality = analyze_skill_quality(meta, body, discovered[skill_key])
+            discovered[skill_key]["dependencies"] = quality["dependencies"]
+            discovered[skill_key]["triggers"] = quality["triggers"]
+            discovered[skill_key]["health"] = {
+                "score": quality["score"],
+                "grade": quality["grade"],
+                "issues": quality["issues"],
             }
 
         if agent_key:
@@ -290,6 +316,7 @@ def scan_all() -> dict[str, Any]:
                     "/.agents/",
                     "/.cursor/",
                     "/.codex/",
+                    "/.claude/",
                 )
             ):
                 continue
@@ -297,7 +324,7 @@ def scan_all() -> dict[str, Any]:
 
     from manager import can_delete
 
-    skills: list[SkillRecord] = []
+    skill_dicts: list[dict[str, Any]] = []
     for item in discovered.values():
         agents = sorted(item["agents"])
         item["agents"] = agents
@@ -305,7 +332,11 @@ def scan_all() -> dict[str, Any]:
         allowed, reason = can_delete(item)
         item["deletable"] = allowed
         item["delete_reason"] = reason
-        skills.append(SkillRecord(**item))
+        skill_dicts.append(item)
+
+    conflicts = build_conflicts(skill_dicts)
+    annotate_conflicts(skill_dicts, conflicts)
+    skills: list[SkillRecord] = [SkillRecord(**item) for item in skill_dicts]
 
     skills.sort(key=lambda s: (s.category, s.name.lower()))
 
@@ -363,6 +394,7 @@ def scan_all() -> dict[str, Any]:
         ],
         "only_on": only_on,
         "shared": shared,
+        "conflicts": conflicts,
         "skills": [asdict(s) for s in skills],
     }
 

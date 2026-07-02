@@ -1,148 +1,265 @@
 # Skill Manager
 
-一个可安装的 Agent Skill，用来管理本机 Skills：扫描、可视化、创建、安装、禁用、删除、导出报告。
+Local-first dashboard and CLI for managing Agent Skills across Grok Build, Claude Code, OpenAI Codex, Cursor, and shared `~/.agents/skills` directories.
 
-GitHub: **https://github.com/funnaz/skill-manager**
+Skill Manager helps you see what skills are installed, where they are mounted, which ones are used, which ones can be updated, and which ones are safe to disable, back up, restore, or remove.
 
-支持：
-- **Grok Build**（`~/.grok/skills/`、内置 skills、marketplace）
-- **共享 Agents**（`~/.agents/skills/`）
-- **Cursor**（`~/.cursor/skills/`）
-- **OpenAI Codex**（`~/.codex/skills/`）
+GitHub: https://github.com/funnaz/skill-manager  
+License: MIT
 
-## 快速安装
+## Highlights
 
-### Windows
+- Web dashboard on `http://127.0.0.1:5520`
+- Local API token protection for `/api/*`
+- Scan Grok, Claude Code, OpenAI Codex, Cursor, and shared skills
+- Create skills from Markdown
+- Install skills from local folders or GitHub repositories
+- Check updates from GitHub and well-known remote skill sources
+- Direct upgrade for clean skills
+- Integrated merge for locally modified skills
+- Threaded batch upgrade with safe skipping for merge-needed skills
+- Backup and restore for risky operations
+- Trash-based delete and restore
+- Disable and enable skills
+- Trigger conflict detection
+- Dependency detection and optional install
+- Health scoring for `SKILL.md`
+- Local usage statistics from observable local Agent logs
+- Operation audit log
+- `.skillpkg` import/export
+- Snapshot, diff, templates, fork, fuzzy search, and cleanup planning
+- Export reports as Word, Markdown, PDF, CSV, HTML, or read-only web report
 
-```powershell
+## Supported Agents
+
+| Agent | Default paths |
+| --- | --- |
+| Grok Build | `~/.grok/skills`, bundled skills, marketplace cache |
+| Shared Agents | `~/.agents/skills` |
+| Claude Code | `~/.claude/skills` |
+| OpenAI Codex | `~/.codex/skills` |
+| Cursor | `~/.cursor/skills` |
+
+## Quick Start
+
+### Run from source
+
+```bash
 git clone https://github.com/funnaz/skill-manager.git
 cd skill-manager
-pip install -r requirements.txt
-python cli.py install --git "https://github.com/funnaz/skill-manager.git" --scope grok
-```
-
-或使用脚本：
-
-```powershell
-.\scripts\install.ps1 -Scope grok
-```
-
-### macOS / Linux
-
-```bash
-git clone https://github.com/funnaz/skill-manager.git
-cd skill-manager
-pip install -r requirements.txt
-python cli.py install --git "https://github.com/funnaz/skill-manager.git" --scope grok
-```
-
-## 使用
-
-### 扫描
-
-```bash
-python cli.py scan
-```
-
-### 启动面板
-
-```bash
+python -m pip install -r requirements.txt
 python cli.py serve --port 5520
 ```
 
-浏览器打开：http://127.0.0.1:5520
+Open:
 
-### 创建 Skill
-
-```bash
-python cli.py create --name my-skill --description "做什么、何时触发" --scope grok
+```text
+http://127.0.0.1:5520
 ```
 
-### 安装 Skill
-
-本地目录：
+### Install as a command
 
 ```bash
-python cli.py install --from-path "C:/path/to/skill" --scope grok
+python -m pip install -e .
+skill-manager serve --port 5520
 ```
 
-GitHub：
+### Install as an Agent Skill
 
 ```bash
-python cli.py install --git "https://github.com/funnaz/wechat-public-account-coach.git" --scope agents
+python cli.py install --git "https://github.com/funnaz/skill-manager.git" --scope agents
 ```
 
-### 禁用 / 启用（Grok）
+Valid scopes:
 
-```bash
-python cli.py disable --name my-skill
-python cli.py enable --name my-skill
+```text
+agents, grok, claude, codex, cursor
 ```
 
-### 删除 Skill
+Windows helper:
 
-```bash
-python cli.py delete --name my-skill
-python cli.py delete --batch "old-skill,another-skill"
+```powershell
+.\scripts\install.ps1 -Scope agents
 ```
 
-### 检测新版本
+macOS/Linux helper:
 
 ```bash
+./scripts/install.sh agents
+```
+
+## Web Dashboard
+
+The dashboard is designed for normal daily use:
+
+1. Click **重新扫描** to refresh local skills.
+2. Use the left filters to narrow by Agent or category.
+3. Select a skill to inspect metadata, health, conflicts, dependencies, and raw `SKILL.md`.
+4. Use **检查更新** before upgrading.
+5. Use **整合更新** for locally modified skills.
+6. Use **备份恢复** or **回收站** if you need to undo a risky operation.
+
+See the full user guide: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
+
+## Common CLI Commands
+
+```bash
+# Scan local skills
+python cli.py scan
+
+# Start dashboard
+python cli.py serve --host 127.0.0.1 --port 5520
+
+# Create a skill
+python cli.py create --name my-skill --description "What it does and when to trigger" --scope agents
+python cli.py create --from-md ./draft.md --scope agents
+
+# Install a skill
+python cli.py install --from-path "C:/path/to/skill" --scope agents
+python cli.py install --git "https://github.com/user/repo.git" --subpath "skills/my-skill" --scope agents
+
+# Delete safely through trash
+python cli.py delete --name old-skill --dry-run
+python cli.py delete --name old-skill
+python cli.py trash
+python cli.py trash-restore --trash-id old-skill-20260702-120000
+
+# Update and merge
 python cli.py check-updates
 python cli.py check-updates --names "dbs,lark-doc"
-```
-
-### 升级 Skill（GitHub 源）
-
-```bash
 python cli.py upgrade --name dbs
+python cli.py batch-upgrade --workers 4
+python cli.py merge --name lark-doc
+python cli.py set-source --name my-skill --url "https://github.com/user/repo.git" --type github
+
+# Backups
+python cli.py backups
+python cli.py restore --backup-id "lark-doc-20260702-123000"
+
+# Dependencies, conflicts, and health
+python cli.py deps
+python cli.py deps --name my-skill
+python cli.py install-deps --name my-skill --yes
+
+# Usage statistics
+python cli.py usage-collect
+python cli.py usage-stats --refresh
+python cli.py usage-hooks-install
+
+# Reports
+python cli.py export --format markdown --lang zh --output skill-report.md
+python cli.py export --format docx --lang en --output skill-report.docx
+python cli.py export --format csv --output skill-report.csv
+python cli.py export --format html --output skill-report.html
+
+# Skill packages
+python cli.py export-pkg --names "skill-a,skill-b" --output skills.skillpkg
+python cli.py import-pkg --package skills.skillpkg --scope agents
+
+# Search, fork, templates
+python cli.py search "excel"
+python cli.py fork --source xlsx --name xlsx-custom --scope agents
+python cli.py templates
+python cli.py from-template --template code-review --name my-code-review
+
+# Audit, snapshots, cleanup
+python cli.py audit --limit 50
+python cli.py snapshot --output office-pc.json
+python cli.py diff-snapshot --snapshot office-pc.json
+python cli.py cleanup-plan --refresh
+python cli.py auto-cleanup --yes
 ```
 
-### 导出报告
+## Upgrade Behavior
+
+Update results are grouped by risk:
+
+| Status | Meaning | Recommended action |
+| --- | --- | --- |
+| Official update | Remote version changed and local copy is clean | Direct upgrade |
+| Local changes only | You changed local files; remote has no newer version | Keep or inspect |
+| Merge recommended | Remote changed and local files were modified | Use integrated merge |
+
+Batch upgrade is threaded. It upgrades clean direct-upgrade candidates and skips merge-needed skills so local customizations are not overwritten. If batch upgrade reports `0` successes, usually every pending item needs manual merge rather than direct upgrade.
+
+## Safety Model
+
+Skill Manager is intentionally conservative:
+
+- The web app binds to `127.0.0.1` by default.
+- API requests require a local session token.
+- Delete uses trash by default.
+- Merge, restore, and other overwrite-like operations create backups first.
+- Protected bundled and marketplace skills are not deleted.
+- Usage statistics stay local.
+
+Customize the local API token:
 
 ```bash
-python cli.py export --format markdown --output skill-report.md
-python cli.py export --format json
+SKILL_MANAGER_TOKEN=your-random-token python cli.py serve
 ```
 
-## 在 Agent 里使用
+Do not expose the dashboard directly to the public internet. If you bind to `0.0.0.0`, put it behind your own authentication and network controls.
 
-安装后，对 Grok 说：
+## Local Data and Privacy
 
-- `/skill-manager`
-- `帮我扫描一下电脑里的 skills`
-- `安装这个 GitHub skill`
-- `禁用 xxx skill`
-- `删除没用的 xxx skill`
-- `导出 skill 报告`
-- `打开 skill 面板`
+Skill Manager does not require an account and does not upload local skill data. It stores local state in:
 
-## 发布
+| Path | Purpose |
+| --- | --- |
+| `~/.agents/.skill-lock.json` | Install source, update source, hashes, timestamps |
+| `~/.skill-manager/settings.json` | Dashboard and install preferences |
+| `~/.skill-manager/backups/` | Backups before risky operations |
+| `~/.skill-manager/trash/` | Trash for deleted skills |
+| `~/.skill-manager/audit.log` | Operation log |
+| `~/.skill-manager/usage-events.jsonl` | Local usage events |
+| `~/.skill-manager/usage-scan-state.json` | Incremental usage scan state |
+
+Clear usage statistics:
 
 ```bash
-git remote add origin https://github.com/funnaz/skill-manager.git
-git push -u origin main
+rm ~/.skill-manager/usage-events.jsonl ~/.skill-manager/usage-scan-state.json
 ```
 
-## 目录结构
+Windows PowerShell:
+
+```powershell
+Remove-Item "$env:USERPROFILE\.skill-manager\usage-events.jsonl","$env:USERPROFILE\.skill-manager\usage-scan-state.json" -ErrorAction SilentlyContinue
+```
+
+## Development
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m ruff check .
+python -m compileall .
+```
+
+Useful docs:
+
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [CHANGELOG.md](CHANGELOG.md)
+
+## Project Structure
 
 ```text
 skill-manager/
-  SKILL.md
-  README.md
-  constants.py
   cli.py
   server.py
   scanner.py
   manager.py
-  config_io.py
+  updater.py
+  diff_util.py
+  backup_manager.py
+  trash_manager.py
+  usage_collector.py
+  usage_insights.py
   report.py
+  static/index.html
   scripts/install.ps1
   scripts/install.sh
-  static/index.html
+  docs/USER_GUIDE.md
 ```
-
-## License
-
-MIT
