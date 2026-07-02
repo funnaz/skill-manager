@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import io
 import json
+import csv
+import html
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from constants import GITHUB_URL
 from scanner import scan_all
+from usage_insights import build_usage_analysis_sections, build_usage_insights, usage_table_rows
 
-EXPORT_FORMATS = ("md", "docx", "pdf")
+EXPORT_FORMATS = ("md", "docx", "pdf", "csv", "html")
 EXPORT_LANGS = ("zh", "en")
 FMT_ALIASES = {
     "word": "docx",
@@ -19,6 +22,8 @@ FMT_ALIASES = {
     ".docx": "docx",
     ".md": "md",
     ".pdf": "pdf",
+    ".csv": "csv",
+    ".html": "html",
 }
 
 
@@ -46,7 +51,11 @@ def _top_agents(data: dict[str, Any]) -> list[tuple[str, int]]:
     )
 
 
-def _build_analysis(lang: str, data: dict[str, Any]) -> list[dict[str, Any]]:
+def _usage_insights_for_report(data: dict[str, Any], lang: str) -> dict[str, Any]:
+    return build_usage_insights(data, refresh=True, lang=lang)
+
+
+def _build_analysis(lang: str, data: dict[str, Any], usage_insights: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     totals = data["totals"]
     categories = _category_counts(data)
     deletable, protected = _deletable_counts(data)
@@ -54,7 +63,7 @@ def _build_analysis(lang: str, data: dict[str, Any]) -> list[dict[str, Any]]:
     shared_ratio = round(totals["shared_skills"] / totals["skills"] * 100) if totals["skills"] else 0
 
     if lang == "zh":
-        return [
+        sections = [
             {
                 "title": "概览解读",
                 "paragraphs": [
@@ -86,8 +95,8 @@ def _build_analysis(lang: str, data: dict[str, Any]) -> list[dict[str, Any]]:
                 ],
             },
         ]
-
-    return [
+    else:
+        sections = [
         {
             "title": "Overview",
             "paragraphs": [
@@ -118,7 +127,10 @@ def _build_analysis(lang: str, data: dict[str, Any]) -> list[dict[str, Any]]:
                 "Mirror high-value custom skills to a private GitHub repo for recovery and version tracking.",
             ],
         },
-    ]
+        ]
+    if usage_insights:
+        sections.extend(build_usage_analysis_sections(lang, data, usage_insights))
+    return sections
 
 
 def _report_meta(lang: str, data: dict[str, Any]) -> dict[str, str]:
@@ -132,6 +144,7 @@ def _report_meta(lang: str, data: dict[str, Any]) -> dict[str, str]:
             "analysis": "分析解读",
             "agents": "Agent 概览",
             "skills": "Skill 清单",
+            "usage": "使用记录与维护建议",
             "headers_agents": ["Agent", "已安装", "已配置", "根目录"],
             "headers_skills": ["名称", "分类", "Agent", "可删除", "路径"],
             "yes": "是",
@@ -150,6 +163,7 @@ def _report_meta(lang: str, data: dict[str, Any]) -> dict[str, str]:
         "analysis": "Analysis",
         "agents": "Agents",
         "skills": "Skill Inventory",
+        "usage": "Usage Records & Maintenance",
         "headers_agents": ["Agent", "Installed", "Configured", "Roots"],
         "headers_skills": ["Name", "Category", "Agents", "Deletable", "Path"],
         "yes": "yes",
@@ -170,8 +184,9 @@ def _markdown_table(headers: list[str], rows: list[list[str]]) -> str:
 
 def build_markdown_report(data: dict[str, Any] | None = None, lang: str = "en") -> str:
     data = data or scan_all()
+    usage_insights = _usage_insights_for_report(data, lang)
     meta = _report_meta(lang, data)
-    analysis = _build_analysis(lang, data)
+    analysis = _build_analysis(lang, data, usage_insights)
     lines = [
         f"# {meta['title']}",
         "",
@@ -193,6 +208,17 @@ def build_markdown_report(data: dict[str, Any] | None = None, lang: str = "en") 
         lines.append(f"### {section['title']}")
         lines.append("")
         lines.extend(section["paragraphs"])
+        lines.append("")
+
+    usage_headers, usage_rows = usage_table_rows(lang, usage_insights)
+    lines.extend([
+        f"## {meta['usage']}",
+        "",
+        _markdown_table(usage_headers, usage_rows[:80]),
+        "",
+    ])
+    if len(usage_rows) > 80:
+        lines.append(f"*…另有 {len(usage_rows) - 80} 个 skill 未列入表格*" if lang == "zh" else f"*…and {len(usage_rows) - 80} more skills omitted*")
         lines.append("")
 
     lines.extend([
@@ -231,6 +257,94 @@ def build_markdown_report(data: dict[str, Any] | None = None, lang: str = "en") 
     return "\n".join(lines)
 
 
+def build_csv_report(data: dict[str, Any] | None = None) -> str:
+    data = data or scan_all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "name",
+        "folder_name",
+        "category",
+        "agents",
+        "deletable",
+        "health_score",
+        "health_grade",
+        "conflicts",
+        "missing_python",
+        "missing_env",
+        "path",
+    ])
+    for skill in data["skills"]:
+        deps = skill.get("dependencies") or {}
+        health = skill.get("health") or {}
+        writer.writerow([
+            skill.get("name"),
+            skill.get("folder_name"),
+            skill.get("category"),
+            ";".join(skill.get("agent_labels") or []),
+            skill.get("deletable"),
+            health.get("score"),
+            health.get("grade"),
+            ";".join(skill.get("conflicts") or []),
+            ";".join(deps.get("missing_python") or []),
+            ";".join(deps.get("missing_env") or []),
+            skill.get("resolved_path"),
+        ])
+    return output.getvalue()
+
+
+def build_html_report(data: dict[str, Any] | None = None, lang: str = "zh") -> str:
+    data = data or scan_all()
+    title = "Skill 管家只读报告" if lang == "zh" else "Skill Manager Read-only Report"
+    rows = []
+    for skill in data["skills"]:
+        health = skill.get("health") or {}
+        deps = skill.get("dependencies") or {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(skill.get('name') or ''))}</td>"
+            f"<td>{html.escape(str(skill.get('category') or ''))}</td>"
+            f"<td>{html.escape(', '.join(skill.get('agent_labels') or []))}</td>"
+            f"<td>{html.escape(str(health.get('score', '')))}</td>"
+            f"<td>{html.escape(', '.join(skill.get('conflicts') or []))}</td>"
+            f"<td>{html.escape(', '.join((deps.get('missing_python') or []) + (deps.get('missing_env') or [])))}</td>"
+            f"<td>{html.escape(str(skill.get('resolved_path') or ''))}</td>"
+            "</tr>"
+        )
+    return f"""<!doctype html>
+<html lang="{html.escape(lang)}">
+<head>
+  <meta charset="utf-8">
+  <title>{html.escape(title)}</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #172033; }}
+    h1 {{ margin-bottom: 4px; }}
+    .meta {{ color: #667085; margin-bottom: 24px; }}
+    .cards {{ display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 24px; }}
+    .card {{ border: 1px solid #d0d5dd; border-radius: 8px; padding: 14px; }}
+    .value {{ font-size: 28px; font-weight: 700; }}
+    table {{ border-collapse: collapse; width: 100%; font-size: 13px; }}
+    th, td {{ border: 1px solid #eaecf0; padding: 8px; text-align: left; vertical-align: top; }}
+    th {{ background: #f9fafb; }}
+  </style>
+</head>
+<body>
+  <h1>{html.escape(title)}</h1>
+  <div class="meta">{html.escape(data["scanned_at"])} · {html.escape(data["home"])}</div>
+  <div class="cards">
+    <div class="card"><div>Skills</div><div class="value">{data["totals"]["skills"]}</div></div>
+    <div class="card"><div>Agents</div><div class="value">{data["totals"]["agents_configured"]}</div></div>
+    <div class="card"><div>Shared</div><div class="value">{data["totals"]["shared_skills"]}</div></div>
+    <div class="card"><div>Conflicts</div><div class="value">{len(data.get("conflicts") or {})}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Name</th><th>Category</th><th>Agents</th><th>Health</th><th>Conflicts</th><th>Missing</th><th>Path</th></tr></thead>
+    <tbody>{''.join(rows)}</tbody>
+  </table>
+</body>
+</html>"""
+
+
 def _pdf_font_path() -> Path | None:
     candidates = [
         Path(r"C:\Windows\Fonts\simhei.ttf"),
@@ -252,8 +366,9 @@ def build_pdf_report(data: dict[str, Any] | None = None, lang: str = "zh") -> by
         raise ValueError("PDF 导出需要安装 fpdf2：pip install fpdf2") from exc
 
     data = data or scan_all()
+    usage_insights = _usage_insights_for_report(data, lang)
     meta = _report_meta(lang, data)
-    analysis = _build_analysis(lang, data)
+    analysis = _build_analysis(lang, data, usage_insights)
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=15)
@@ -293,6 +408,13 @@ def build_pdf_report(data: dict[str, Any] | None = None, lang: str = "zh") -> by
             clean = paragraph.replace("**", "")
             write_line(clean)
         pdf.ln(2)
+
+    write_line(meta["usage"], size=13, gap=7)
+    usage_headers, usage_rows = usage_table_rows(lang, usage_insights)
+    write_line(" | ".join(usage_headers), size=9, gap=5)
+    for row in usage_rows[:60]:
+        write_line(" | ".join(row), size=8, gap=4)
+    pdf.ln(4)
 
     write_line(meta["agents"], size=13, gap=7)
     for agent in data["agents"]:
@@ -378,8 +500,9 @@ def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> b
         raise ValueError("Word 导出需要安装 python-docx：pip install python-docx") from exc
 
     data = data or scan_all()
+    usage_insights = _usage_insights_for_report(data, lang)
     meta = _report_meta(lang, data)
-    analysis = _build_analysis(lang, data)
+    analysis = _build_analysis(lang, data, usage_insights)
     font_name = _docx_font_name(lang)
 
     doc = Document()
@@ -412,6 +535,17 @@ def build_docx_report(data: dict[str, Any] | None = None, lang: str = "zh") -> b
         for paragraph in section["paragraphs"]:
             clean = paragraph.replace("**", "")
             doc.add_paragraph(clean)
+
+    doc.add_heading(meta["usage"], level=1)
+    usage_headers, usage_rows = usage_table_rows(lang, usage_insights)
+    usage_table = doc.add_table(rows=1, cols=len(usage_headers))
+    usage_table.style = "Table Grid"
+    for idx, header in enumerate(usage_headers):
+        usage_table.rows[0].cells[idx].text = header
+    for row in usage_rows[:80]:
+        cells = usage_table.add_row().cells
+        for idx, value in enumerate(row):
+            cells[idx].text = value
 
     doc.add_heading(meta["agents"], level=1)
     agent_table = doc.add_table(rows=1, cols=4)
@@ -460,6 +594,12 @@ def build_export_bytes(fmt: str, lang: str = "zh", data: dict[str, Any] | None =
     if fmt == "md":
         content = build_markdown_report(data, lang=lang).encode("utf-8")
         return content, "text/markdown; charset=utf-8", f"{prefix}-{stamp}.md"
+    if fmt == "csv":
+        content = build_csv_report(data).encode("utf-8-sig")
+        return content, "text/csv; charset=utf-8", f"{prefix}-{stamp}.csv"
+    if fmt == "html":
+        content = build_html_report(data, lang=lang).encode("utf-8")
+        return content, "text/html; charset=utf-8", f"{prefix}-{stamp}.html"
     if fmt == "docx":
         content = build_docx_report(data, lang=lang)
         return content, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", f"{prefix}-{stamp}.docx"
@@ -475,6 +615,7 @@ def export_report(
     data = scan_all()
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
 
+    fmt = normalize_export_fmt(fmt)
     if fmt == "json":
         content = json.dumps(data, ensure_ascii=False, indent=2)
         suffix = ".json"

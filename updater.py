@@ -14,14 +14,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+from audit_log import append_audit
 from constants import GITHUB_CLONE_URL
 from diff_util import analyze_change_nature, diff_folders, filter_diff_for_classification, merge_folders
-from manager import _load_lock, _update_lock_install, install_skill
-from scanner import HOME, _read_frontmatter, scan_all
+from manager import LOCK_FILE_MUTEX, _load_lock, _update_lock_install, install_skill
+from scanner import _read_frontmatter, scan_all
 
 USER_AGENT = "skill-manager/2.3"
+MAX_BATCH_UPGRADE_WORKERS = 8
 
 
 def _now_iso() -> str:
@@ -147,7 +147,6 @@ def _github_skill_dir(repo_dir: Path, skill_path: str | None, folder_name: str) 
 
 def _prepare_lock(skill: dict[str, Any], lock: dict[str, Any]) -> dict[str, Any]:
     folder_name = skill["folder_name"]
-    source_type = (lock.get("sourceType") or skill.get("source_type") or "").lower()
     if folder_name == "skill-manager" or lock.get("sourceUrl") == GITHUB_CLONE_URL:
         return {
             **lock,
@@ -192,7 +191,6 @@ def fetch_remote_skill_dir(skill: dict[str, Any], lock: dict[str, Any], repo_cac
 
 
 def _classify_result(info: dict[str, Any]) -> dict[str, Any]:
-    diff = info.get("diff") or {}
     nature = info.get("change_nature") or {}
     official_update = bool(info.get("official_update"))
     user_edited = bool(nature.get("user_edited"))
@@ -431,15 +429,16 @@ def merge_skill_integrated(name: str, *, overwrite_skill_md: bool = False) -> di
 
     if lock.get("sourceType") == "github" or remote_meta.get("source_type") == "github":
         new_hash = compute_folder_hash(local_dir)
-        lock_data = _load_lock()
-        entry = lock_data.setdefault("skills", {}).setdefault(skill["folder_name"], {})
-        entry["skillFolderHash"] = new_hash
-        entry["updatedAt"] = _now_iso()
-        from manager import _save_lock
+        with LOCK_FILE_MUTEX:
+            lock_data = _load_lock()
+            entry = lock_data.setdefault("skills", {}).setdefault(skill["folder_name"], {})
+            entry["skillFolderHash"] = new_hash
+            entry["updatedAt"] = _now_iso()
+            from manager import _save_lock
 
-        _save_lock(lock_data)
+            _save_lock(lock_data)
 
-    return {
+    final = {
         "ok": True,
         "action": "merge",
         "name": skill["folder_name"],
@@ -450,6 +449,8 @@ def merge_skill_integrated(name: str, *, overwrite_skill_md: bool = False) -> di
         "actions": merge_result["actions"],
         "merged_files": merge_result["merged_files"],
     }
+    append_audit("merge", name=skill["folder_name"], backup_path=merge_result["backup_path"])
+    return final
 
 
 def upgrade_skill(name: str, scope: str | None = None, *, overwrite: bool = True) -> dict[str, Any]:
@@ -476,6 +477,7 @@ def upgrade_skill(name: str, scope: str | None = None, *, overwrite: bool = True
             git_url=git_url or GITHUB_CLONE_URL,
             skill_subpath=str(Path(lock["skillPath"]).parent.as_posix()) if lock.get("skillPath") else None,
             overwrite=True,
+            allow_reserved_name=skill["folder_name"] == "skill-manager",
         )
     else:
         return merge_skill_integrated(name, overwrite_skill_md=overwrite)
@@ -483,7 +485,60 @@ def upgrade_skill(name: str, scope: str | None = None, *, overwrite: bool = True
     if target_scope in {"agents", "project-agents"}:
         _update_lock_install(skill["folder_name"], git_url or "github", "github", git_url)
 
-    return {"ok": True, "action": "upgrade", "name": skill["folder_name"], "scope": target_scope, "install": result}
+    final = {"ok": True, "action": "upgrade", "name": skill["folder_name"], "scope": target_scope, "install": result}
+    append_audit("upgrade", name=skill["folder_name"], scope=target_scope)
+    return final
+
+
+def batch_upgrade_skills(names: list[str] | None = None, max_workers: int = 4) -> dict[str, Any]:
+    skipped: list[dict[str, Any]] = []
+    if names:
+        targets = []
+        seen = set()
+        for name in names:
+            cleaned = name.strip()
+            if cleaned and cleaned not in seen:
+                targets.append(cleaned)
+                seen.add(cleaned)
+    else:
+        updates = check_updates(max_workers=max_workers)
+        summary = updates.get("summary") or {}
+        safe_items = list(summary.get("official_updates") or []) + list(summary.get("remote_updates") or [])
+        targets = [item["name"] for item in safe_items if item.get("name")]
+        merge_items = list(summary.get("merge_needed") or []) + list(summary.get("official_with_local_changes") or [])
+        skipped = [
+            {
+                "ok": False,
+                "name": item.get("name"),
+                "skipped": True,
+                "reason": "需要整合更新，批量升级不会自动覆盖本地改动",
+            }
+            for item in merge_items
+            if item.get("name")
+        ]
+
+    if not targets:
+        return {"ok": True, "action": "batch_upgrade", "workers": max_workers, "results": skipped}
+
+    workers = max(1, min(max_workers, len(targets), MAX_BATCH_UPGRADE_WORKERS))
+    results: list[dict[str, Any]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(upgrade_skill, name): name for name in targets}
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results.append(future.result())
+            except Exception as exc:  # noqa: BLE001
+                results.append({"ok": False, "name": name, "error": str(exc)})
+
+    results.extend(skipped)
+    results.sort(key=lambda item: str(item.get("name") or item.get("install", {}).get("name") or ""))
+    return {
+        "ok": all(item.get("ok") or item.get("skipped") for item in results),
+        "action": "batch_upgrade",
+        "workers": workers,
+        "results": results,
+    }
 
 
 def merge_updates_into_scan(scan_data: dict[str, Any], update_data: dict[str, Any]) -> dict[str, Any]:

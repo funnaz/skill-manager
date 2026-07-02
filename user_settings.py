@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from scanner import HOME
 
 SETTINGS_PATH = HOME / ".skill-manager" / "settings.json"
 DEFAULT_SCOPE = "agents"
-UI_SCOPES = ("agents", "codex", "cursor", "grok")
+UI_SCOPES = ("agents", "claude", "codex", "cursor", "grok")
 
 
 def _default_settings() -> dict[str, Any]:

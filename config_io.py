@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
+from audit_log import append_audit
 from scanner import HOME
 
 CONFIG_PATH = HOME / ".grok" / "config.toml"
@@ -79,6 +79,7 @@ def disable_skill(name: str) -> dict:
     if cleaned not in disabled:
         disabled.append(cleaned)
     _write_disabled(disabled)
+    append_audit("disable", name=cleaned, target="grok")
     return {"ok": True, "action": "disable", "name": cleaned, "disabled": sorted(set(disabled))}
 
 
@@ -88,4 +89,5 @@ def enable_skill(name: str) -> dict:
         raise ValueError("skill 名称不能为空")
     disabled = [item for item in load_disabled_skills() if item != cleaned]
     _write_disabled(disabled)
+    append_audit("enable", name=cleaned, target="grok")
     return {"ok": True, "action": "enable", "name": cleaned, "disabled": disabled}
